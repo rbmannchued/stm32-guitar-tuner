@@ -56,6 +56,8 @@ OPENCM3_INC = $(OPENCM3_DIR)/include
 
 # Inclusion of library header files
 INCLUDES += $(patsubst %,-I%, . $(OPENCM3_INC) )
+INCLUDES += -I fftCmsis/libs/cmsis_dsp/Include/
+INCLUDES += -I fftCmsis/libs/cmsis_dsp/Core/Include/
 
 OBJS = $(CFILES:%.c=$(BUILD_DIR)/%.o)
 OBJS += $(CXXFILES:%.cxx=$(BUILD_DIR)/%.o)
@@ -73,6 +75,8 @@ TGT_CFLAGS += -ffunction-sections -fdata-sections
 TGT_CFLAGS += -Wextra -Wshadow -Wno-unused-variable -Wimplicit-function-declaration
 TGT_CFLAGS += -Wredundant-decls -Wstrict-prototypes -Wmissing-prototypes
 
+TGT_CFLAGS += -mfpu=fpv4-sp-d16 -mfloat-abi=hard -DARM_MATH_CM4
+
 TGT_CXXFLAGS += $(OPT) $(CXXSTD) -ggdb3
 TGT_CXXFLAGS += $(ARCH_FLAGS)
 TGT_CXXFLAGS += -fno-common
@@ -85,6 +89,8 @@ TGT_LDFLAGS += -T$(LDSCRIPT) -L$(OPENCM3_DIR)/lib -nostartfiles
 TGT_LDFLAGS += $(ARCH_FLAGS)
 TGT_LDFLAGS += -specs=nano.specs
 TGT_LDFLAGS += -Wl,--gc-sections
+TGT_LDFLAGS += -mfpu=fpv4-sp-d16 -mfloat-abi=hard -DARM_MATH_CM4
+
 # OPTIONAL
 #TGT_LDFLAGS += -Wl,-Map=$(PROJECT).map
 ifeq ($(V),99)
@@ -97,7 +103,7 @@ LDLIBS += -l$(OPENCM3_LIB)
 endif
 # nosys is only in newer gcc-arm-embedded...
 #LDLIBS += -specs=nosys.specs
-LDLIBS += -Wl,--start-group -lc -lgcc -lnosys -lm -Wl,--end-group
+LDLIBS += -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group
 
 # Burn in legacy hell fortran modula pascal yacc idontevenwat
 .SUFFIXES:
