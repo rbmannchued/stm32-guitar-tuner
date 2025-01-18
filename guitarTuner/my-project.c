@@ -1,89 +1,86 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
-#include <libopencm3/stm32/usart.h>
+#include <arm_math.h>
+#include <stdint.h>
+#include <stdlib.h>
 #include <math.h>
-#include <stdio.h>
-#include "arm_math.h"  // CMSIS-DSP
 
-// Tamanho da FFT (deve ser uma potência de 2)
-#define FFT_SIZE 1024
+#define SAMPLE_RATE 44100
+#define BUFFER_SIZE 1024
 
-// Dados de entrada e saída da FFT
-float32_t input[FFT_SIZE];
-float32_t output[FFT_SIZE];
+// Buffers for Karplus-Strong and FFT
+float ks_buffer[BUFFER_SIZE];
+float fft_input[BUFFER_SIZE * 2]; // Interleaved real and imaginary parts
+float fft_output[BUFFER_SIZE];
 
-// Função de inicialização do STM32
-void setup(void) {
-    // Ativar o clock para o GPIOA
-    rcc_periph_clock_enable(RCC_GPIOA);
-
-    // Configurar o LED no GPIOA (pino 5)
-    gpio_mode_setup(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO5);
-}
-void usart_setup(void) {
-    // Ativar o clock para o GPIOA e USART2
-    rcc_periph_clock_enable(RCC_GPIOA);
-    rcc_periph_clock_enable(RCC_USART2);
-
-    // Configurar os pinos GPIOA2 e GPIOA3 para USART2
-    gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO2 | GPIO3);
-    gpio_set_af(GPIOA, GPIO_AF7, GPIO2 | GPIO3);
-
-    // Configurar USART2: Baudrate, 8N1
-    usart_set_baudrate(USART2, 115200);
-    usart_set_databits(USART2, 8);
-    usart_set_stopbits(USART2, USART_STOPBITS_1);
-    usart_set_mode(USART2, USART_MODE_TX);
-    usart_set_parity(USART2, USART_PARITY_NONE);
-    usart_set_flow_control(USART2, USART_FLOWCONTROL_NONE);
-
-    // Habilitar USART2
-    usart_enable(USART2);
-}
-void usart_send_float(float value) {
-    char buffer[32];
-    int len = snprintf(buffer, sizeof(buffer), "%.4f\n", value);
-    for (int i = 0; i < len; i++) {
-        usart_send_blocking(USART2, buffer[i]);
+// Karplus-Strong initialization
+void karplus_strong_init(float *buffer, int buffer_size, float frequency) {
+    int period = (int)(SAMPLE_RATE / frequency);
+    for (int i = 0; i < buffer_size; i++) {
+        if (i < period) {
+            buffer[i] = (float)(rand() / (float)RAND_MAX) - 0.5f; // Inicializa com ruído
+        } else {
+            buffer[i] = 0.0f;
+        }
     }
 }
 
-// Função principal
+// Karplus-Strong update
+float karplus_strong_step(float *buffer, int buffer_size, int *idx) {
+    float output = buffer[*idx];
+    int next_idx = (*idx + 1) % buffer_size;
+    buffer[*idx] = 0.5f * (buffer[*idx] + buffer[next_idx]);
+    *idx = next_idx;
+    return output;
+}
+
+// FFT computation
+void compute_fft(float *input, float *output, int buffer_size) {
+    arm_cfft_radix4_instance_f32 fft_instance;
+    arm_cfft_radix4_init_f32(&fft_instance, buffer_size, 0, 1);
+    arm_cfft_radix4_f32(&fft_instance, input);
+    arm_cmplx_mag_f32(input, output, buffer_size);
+}
+
+// Find fundamental frequency
+float find_fundamental_frequency(float *fft_output, int buffer_size) {
+    float max_value = 0.0f;
+    int max_index = 0;
+    for (int i = 1; i < buffer_size / 2; i++) { // Ignorar componente DC
+        if (fft_output[i] > max_value) {
+            max_value = fft_output[i];
+            max_index = i;
+        }
+    }
+    return (float)max_index * SAMPLE_RATE / buffer_size;
+}
+
 int main(void) {
-    // Inicialização do STM32
-    setup();
-    usart_setup();
+    // Configuração do clock
+    rcc_clock_setup_pll(&rcc_hse_25mhz_3v3[RCC_CLOCK_3V3_84MHZ]);
 
-    // Gerar um sinal simples de seno para ser analisado pela FFT
-    for (int i = 0; i < FFT_SIZE; i++) {
-        input[i] = sinf(2.0f * PI * i / FFT_SIZE);  // Sinal seno
-    }
+    // Simulação da corda
+    float frequency = 440.0f; // Frequência inicial (A4)
+    int ks_index = 0;
+    karplus_strong_init(ks_buffer, BUFFER_SIZE, frequency);
 
-    // Inicializar a estrutura da FFT CMSIS-DSP
-    arm_cfft_radix4_instance_f32 S;
-    arm_cfft_radix4_init_f32(&S, FFT_SIZE, 0, 1);  // Inicialização da FFT (radix 4)
-
-    // Aplicar a FFT no sinal
-    arm_cfft_radix4_f32(&S, input);
-
-    // Calcular a magnitude dos resultados
-    for (int i = 0; i < FFT_SIZE / 2; i++) {
-        // Os resultados da FFT são complexos. Calculamos a magnitude.
-        output[i] = sqrtf(input[2 * i] * input[2 * i] + input[2 * i + 1] * input[2 * i + 1]);
-    }
-
-    for (int i = 0; i < FFT_SIZE / 2; i++) {
-        usart_send_float(output[i]);
+    // Simulação e análise
+    for (int i = 0; i < BUFFER_SIZE; i++) {
+        float sample = karplus_strong_step(ks_buffer, BUFFER_SIZE, &ks_index);
+        fft_input[2 * i] = sample;     // Parte real
+        fft_input[2 * i + 1] = 0.0f;  // Parte imaginária
     }
     
+    // Calcular FFT
+    compute_fft(fft_input, fft_output, BUFFER_SIZE);
 
-    // Loop para depuração (LED piscando)
+    // Encontrar frequência fundamental
+    volatile float fundamental_frequency = find_fundamental_frequency(fft_output, BUFFER_SIZE);
+ 
+    // Exibir resultado (depuração via UART ou debugger)
     while (1) {
-        // Ligar e desligar o LED para indicar que o código está funcionando
-        gpio_toggle(GPIOA, GPIO5);
-        for (int i = 0; i < 1000000; i++) {
-            __asm__("NOP");
-        }
+        // A frequência fundamental pode ser visualizada no debugger
+        __asm__("nop");
     }
 
     return 0;

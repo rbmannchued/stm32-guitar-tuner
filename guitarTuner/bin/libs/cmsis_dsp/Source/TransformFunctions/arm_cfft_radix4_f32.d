@@ -3,33 +3,20 @@ bin/libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_radix4_f32.o: \
  libs/cmsis_dsp/Include/dsp/transform_functions.h \
  libs/cmsis_dsp/Include/arm_math_types.h \
  libs/cmsis_dsp/Core/Include/cmsis_compiler.h \
- /opt/gcc-arm/lib/gcc/arm-none-eabi/10.3.1/include/stdint.h \
- /opt/gcc-arm/arm-none-eabi/include/stdint.h \
- /opt/gcc-arm/arm-none-eabi/include/machine/_default_types.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/features.h \
- /opt/gcc-arm/arm-none-eabi/include/_newlib_version.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/_intsup.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/_stdint.h \
- libs/cmsis_dsp/Core/Include/cmsis_gcc.h \
- /opt/gcc-arm/arm-none-eabi/include/string.h \
- /opt/gcc-arm/arm-none-eabi/include/_ansi.h \
- /opt/gcc-arm/arm-none-eabi/include/newlib.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/config.h \
- /opt/gcc-arm/arm-none-eabi/include/machine/ieeefp.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/reent.h \
- /opt/gcc-arm/arm-none-eabi/include/_ansi.h \
- /opt/gcc-arm/lib/gcc/arm-none-eabi/10.3.1/include/stddef.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/_types.h \
- /opt/gcc-arm/arm-none-eabi/include/machine/_types.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/lock.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/cdefs.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/string.h \
- /opt/gcc-arm/arm-none-eabi/include/math.h \
- /opt/gcc-arm/lib/gcc/arm-none-eabi/10.3.1/include/float.h \
- /opt/gcc-arm/lib/gcc/arm-none-eabi/10.3.1/include-fixed/limits.h \
- /opt/gcc-arm/lib/gcc/arm-none-eabi/10.3.1/include-fixed/syslimits.h \
- /opt/gcc-arm/arm-none-eabi/include/limits.h \
- /opt/gcc-arm/arm-none-eabi/include/sys/syslimits.h \
+ /usr/lib/gcc/arm-none-eabi/13.2.1/include/stdint.h \
+ libs/cmsis_dsp/Core/Include/cmsis_gcc.h /usr/include/newlib/string.h \
+ /usr/include/newlib/_ansi.h /usr/include/newlib/newlib.h \
+ /usr/include/newlib/_newlib_version.h /usr/include/newlib/sys/config.h \
+ /usr/include/newlib/machine/ieeefp.h /usr/include/newlib/sys/features.h \
+ /usr/include/newlib/sys/reent.h /usr/include/newlib/_ansi.h \
+ /usr/lib/gcc/arm-none-eabi/13.2.1/include/stddef.h \
+ /usr/include/newlib/sys/cdefs.h \
+ /usr/include/newlib/machine/_default_types.h \
+ /usr/include/newlib/sys/_types.h /usr/include/newlib/machine/_types.h \
+ /usr/include/newlib/sys/lock.h /usr/include/newlib/sys/string.h \
+ /usr/include/newlib/math.h \
+ /usr/lib/gcc/arm-none-eabi/13.2.1/include/float.h \
+ /usr/lib/gcc/arm-none-eabi/13.2.1/include/limits.h \
  libs/cmsis_dsp/Include/arm_math_memory.h \
  libs/cmsis_dsp/Include/arm_math_types.h \
  libs/cmsis_dsp/Include/dsp/none.h libs/cmsis_dsp/Include/dsp/utils.h \

@@ -2,3 +2,5 @@
 *.elf
 *.ld
 ./guitarTuner/tags
+./guitarTuner/bin
+./guitarTuner/TAGS
