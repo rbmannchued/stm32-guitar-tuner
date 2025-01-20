@@ -25,9 +25,6 @@ bin/my-project.o: my-project.c \
  ../libopencm3/include/libopencm3/stm32/common/usart_common_f24.h \
  ../libopencm3/include/libopencm3/stm32/common/usart_common_f124.h \
  ../libopencm3/include/libopencm3/stm32/common/usart_common_all.h \
- ../libopencm3/include/libopencm3/stm32/dma.h \
- ../libopencm3/include/libopencm3/stm32/f4/dma.h \
- ../libopencm3/include/libopencm3/stm32/common/dma_common_f24.h \
  libs/cmsis_dsp/Include/arm_math.h \
  libs/cmsis_dsp/Include/arm_math_types.h \
  libs/cmsis_dsp/Core/Include/cmsis_compiler.h \

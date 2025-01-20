@@ -2,7 +2,6 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/adc.h>
 #include <libopencm3/stm32/usart.h>
-#include <libopencm3/stm32/dma.h>
 #include <arm_math.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -22,37 +21,21 @@ void adc_setup(void) {
     // Habilitar clocks necessários
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_ADC1);
-    rcc_periph_clock_enable(RCC_DMA2);
 
     // Configurar GPIO PA0 como entrada analógica
     gpio_mode_setup(GPIOA, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, GPIO0);
 
     // Configurar ADC
     adc_power_off(ADC1);
-    adc_disable_scan_mode(ADC1);
+    adc_disable_scan_mode(ADC1); // Apenas um canal
     adc_set_single_conversion_mode(ADC1);
-    adc_set_sample_time_on_all_channels(ADC1, ADC_SMPR_SMP_28CYC);
+    adc_set_sample_time_on_all_channels(ADC1, ADC_SMPR_SMP_480CYC);
     adc_power_on(ADC1);
+
+    // Esperar estabilização do ADC
     for (int i = 0; i < 800000; i++) {
         __asm__("nop");
     }
-
-    // Configurar DMA para transferir os dados do ADC
-    dma_stream_reset(DMA2, DMA_STREAM0);
-    dma_set_peripheral_address(DMA2, DMA_STREAM0, (uint32_t)&ADC_DR(ADC1));
-    dma_set_memory_address(DMA2, DMA_STREAM0, (uint32_t)adc_buffer);
-    dma_set_number_of_data(DMA2, DMA_STREAM0, BUFFER_SIZE);
-    dma_channel_select(DMA2, DMA_STREAM0, DMA_SxCR_CHSEL_0);
-    dma_enable_memory_increment_mode(DMA2, DMA_STREAM0);
-    dma_set_transfer_mode(DMA2, DMA_STREAM0, DMA_SxCR_DIR_PERIPHERAL_TO_MEM);
-    dma_set_priority(DMA2, DMA_STREAM0, DMA_SxCR_PL_HIGH);
-    dma_enable_circular_mode(DMA2, DMA_STREAM0);
-    
-
-    // Habilitar o ADC para usar DMA
-    adc_enable_dma(ADC1);
-    dma_enable_stream(DMA2, DMA_STREAM0);
-    adc_start_conversion_regular(ADC1);
 }
 
 // Configuração da USART
@@ -92,6 +75,7 @@ void compute_fft(float *input, float *output, int buffer_size) {
     arm_cmplx_mag_f32(input, output, buffer_size);
 }
 
+// Função para aplicar filtro passa-baixa
 float lowpass_filter(float input, float cutoff_freq, float sample_rate) {
     static float prev_output = 0.0f;
     float alpha = cutoff_freq / (cutoff_freq + sample_rate / (2.0f * PI));
@@ -99,7 +83,7 @@ float lowpass_filter(float input, float cutoff_freq, float sample_rate) {
     return prev_output;
 }
 
-// Find fundamental frequency
+// Encontrar frequência fundamental
 float find_fundamental_frequency(float *fft_output, int buffer_size) {
     float max_value = 0.0f;
     int max_index = 0;
@@ -110,6 +94,15 @@ float find_fundamental_frequency(float *fft_output, int buffer_size) {
         }
     }
     return (float)max_index * SAMPLE_RATE / buffer_size;
+}
+
+// Função para capturar dados do ADC sem DMA
+void capture_adc_data(uint16_t *buffer, int size) {
+    for (int i = 0; i < size; i++) {
+        adc_start_conversion_regular(ADC1);
+        while (!adc_eoc(ADC1)); // Esperar o fim da conversão
+        buffer[i] = adc_read_regular(ADC1);
+    }
 }
 
 int main(void) {
@@ -125,26 +118,22 @@ int main(void) {
 
     // Captura e análise do sinal
     while (1) {
-        // Copiar amostras do ADC para o buffer de entrada da FFT
-        /* for (int i = 0; i < BUFFER_SIZE; i++) { */
-        /*     fft_input[2 * i] = (float)adc_buffer[i] / 4096.0f - 0.5f; // Normalizar para [-0.5, 0.5] */
-        /*     fft_input[2 * i + 1] = 0.0f;  // Parte imaginária */
-        /* } */
+        // Capturar amostras do ADC
+        capture_adc_data(adc_buffer, BUFFER_SIZE);
 
-	/* for (int i = 0; i < BUFFER_SIZE; i++) { */
-	/*     fft_input[2 * i] = 0.5f * arm_sin_f32(2 * PI * 440.0f * i / SAMPLE_RATE); */
-	/*     fft_input[2 * i + 1] = 0.0f; // Parte */
-	/* } */
-	for (int i = 0; i < 10; i++) {
-	    char output_buffer[50];
-	    snprintf(output_buffer, sizeof(output_buffer), "ADC[%d]: %d\r\n", i, adc_buffer[i]);
-	    usart_send_string(output_buffer);
-	}
-	for (int i = 0; i < BUFFER_SIZE; i++) {
-	    float sample = (float)adc_buffer[i] / 4096.0f - 0.5f; // Normalizar
-	    fft_input[2 * i] = lowpass_filter(sample, 6000.0f, SAMPLE_RATE);
-	    fft_input[2 * i + 1] = 0.0f; // Parte imaginária
-	}
+        // Imprimir os primeiros 10 valores do ADC
+        for (int i = 0; i < 10; i++) {
+            snprintf(output_buffer, sizeof(output_buffer), "ADC[%d]: %d\r\n", i, adc_buffer[i]);
+            usart_send_string(output_buffer);
+        }
+
+        // Normalizar e aplicar filtro passa-baixa
+        for (int i = 0; i < BUFFER_SIZE; i++) {
+            float sample = (float)adc_buffer[i] / 4096.0f - 0.5f; // Normalizar
+            fft_input[2 * i] = lowpass_filter(sample, 8000.0f, SAMPLE_RATE);
+            fft_input[2 * i + 1] = 0.0f; // Parte imaginária
+        }
+
         // Calcular FFT
         compute_fft(fft_input, fft_output, BUFFER_SIZE);
 
