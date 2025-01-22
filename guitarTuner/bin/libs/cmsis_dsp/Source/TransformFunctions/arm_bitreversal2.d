@@ -1,6 +1,6 @@
-bin/libs/cmsis_dsp/Source/StatisticsFunctions/arm_max_f32.o: \
- libs/cmsis_dsp/Source/StatisticsFunctions/arm_max_f32.c \
- libs/cmsis_dsp/Include/./dsp/statistics_functions.h \
+bin/libs/cmsis_dsp/Source/TransformFunctions/arm_bitreversal2.o: \
+ libs/cmsis_dsp/Source/TransformFunctions/arm_bitreversal2.c \
+ libs/cmsis_dsp/Include/dsp/transform_functions.h \
  libs/cmsis_dsp/Include/arm_math_types.h \
  libs/cmsis_dsp/Core/Include/cmsis_compiler.h \
  /usr/lib/gcc/arm-none-eabi/13.2.1/include/stdint.h \
@@ -21,4 +21,7 @@ bin/libs/cmsis_dsp/Source/StatisticsFunctions/arm_max_f32.o: \
  libs/cmsis_dsp/Include/arm_math_types.h \
  libs/cmsis_dsp/Include/dsp/none.h libs/cmsis_dsp/Include/dsp/utils.h \
  libs/cmsis_dsp/Include/dsp/basic_math_functions.h \
+ libs/cmsis_dsp/Include/dsp/complex_math_functions.h \
+ libs/cmsis_dsp/Include/dsp/fast_math_functions.h \
+ libs/cmsis_dsp/Include/arm_common_tables.h \
  libs/cmsis_dsp/Include/dsp/fast_math_functions.h

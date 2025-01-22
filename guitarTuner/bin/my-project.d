@@ -69,7 +69,8 @@ bin/my-project.o: my-project.c \
  libs/cmsis_dsp/Include/dsp/support_functions.h \
  libs/cmsis_dsp/Include/dsp/quaternion_math_functions.h \
  libs/cmsis_dsp/Include/dsp/window_functions.h \
- /usr/include/newlib/stdlib.h /usr/include/newlib/machine/stdlib.h \
- /usr/include/newlib/stdio.h \
+ libs/cmsis_dsp/Include/arm_const_structs.h \
+ libs/cmsis_dsp/Include/arm_common_tables.h /usr/include/newlib/stdlib.h \
+ /usr/include/newlib/machine/stdlib.h /usr/include/newlib/stdio.h \
  /usr/lib/gcc/arm-none-eabi/13.2.1/include/stdarg.h \
  /usr/include/newlib/sys/stdio.h

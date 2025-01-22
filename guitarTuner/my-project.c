@@ -2,13 +2,15 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/adc.h>
 #include <libopencm3/stm32/usart.h>
-#include <arm_math.h>
+#include "arm_math.h"
+#include "arm_const_structs.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
 
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 8000
 #define BUFFER_SIZE 1024
 
 // Buffers para entrada e FFT
@@ -27,6 +29,7 @@ void adc_setup(void) {
 
     // Configurar ADC
     adc_power_off(ADC1);
+    adc_set_resolution(ADC1, ADC_CR1_RES_12BIT);
     adc_disable_scan_mode(ADC1); // Apenas um canal
     adc_set_single_conversion_mode(ADC1);
     adc_set_sample_time_on_all_channels(ADC1, ADC_SMPR_SMP_480CYC);
@@ -67,14 +70,21 @@ void usart_send_string(const char *str) {
     }
 }
 
-// FFT computation
 void compute_fft(float *input, float *output, int buffer_size) {
-    arm_cfft_radix4_instance_f32 fft_instance;
-    arm_cfft_radix4_init_f32(&fft_instance, buffer_size, 0, 1);
-    arm_cfft_radix4_f32(&fft_instance, input);
-    arm_cmplx_mag_f32(input, output, buffer_size);
-}
+    arm_cfft_instance_f32 fft_instance;
 
+    // Inicializa a instância da FFT
+    if (arm_cfft_init_f32(&fft_instance, buffer_size) != ARM_MATH_SUCCESS) {
+        // Handle error: tamanho do buffer pode não ser suportado
+        return;
+    }
+
+    // Executa a FFT
+    arm_cfft_f32(&fft_instance, input, 0, 1);
+
+    // Calcula a magnitude dos componentes de frequência
+    arm_cmplx_mag_f32(input, output, buffer_size / 2);
+}
 // Função para aplicar filtro passa-baixa
 float lowpass_filter(float input, float cutoff_freq, float sample_rate) {
     static float prev_output = 0.0f;
@@ -130,19 +140,20 @@ int main(void) {
         // Normalizar e aplicar filtro passa-baixa
         for (int i = 0; i < BUFFER_SIZE; i++) {
             float sample = (float)adc_buffer[i] / 4096.0f - 0.5f; // Normalizar
-            fft_input[2 * i] = lowpass_filter(sample, 8000.0f, SAMPLE_RATE);
+            fft_input[2 * i] = lowpass_filter(sample, 2000.0f, SAMPLE_RATE);
             fft_input[2 * i + 1] = 0.0f; // Parte imaginária
         }
 
         // Calcular FFT
         compute_fft(fft_input, fft_output, BUFFER_SIZE);
-
+	
         // Encontrar frequência fundamental
         float fundamental_frequency = find_fundamental_frequency(fft_output, BUFFER_SIZE);
 
         // Formatar e enviar a frequência pela USART
         snprintf(output_buffer, sizeof(output_buffer), "Freq: %.2f Hz\r\n", fundamental_frequency);
         usart_send_string(output_buffer);
+	
     }
 
     return 0;
