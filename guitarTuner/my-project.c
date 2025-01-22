@@ -81,9 +81,9 @@ void compute_fft(float *input, float *output, int buffer_size) {
 
     // Executa a FFT
     arm_cfft_f32(&fft_instance, input, 0, 1);
-
+    
     // Calcula a magnitude dos componentes de frequência
-    arm_cmplx_mag_f32(input, output, buffer_size / 2);
+    arm_cmplx_mag_f32(input, output, buffer_size);
 }
 // Função para aplicar filtro passa-baixa
 float lowpass_filter(float input, float cutoff_freq, float sample_rate) {
@@ -130,7 +130,9 @@ int main(void) {
     while (1) {
         // Capturar amostras do ADC
         capture_adc_data(adc_buffer, BUFFER_SIZE);
-
+	for (int i = 0; i < BUFFER_SIZE; i++) {
+	    adc_buffer[i] = (uint16_t)(2048 + 2047 * sinf(2 * PI * 82.41 * i / SAMPLE_RATE));
+	}
         // Imprimir os primeiros 10 valores do ADC
         for (int i = 0; i < 10; i++) {
             snprintf(output_buffer, sizeof(output_buffer), "ADC[%d]: %d\r\n", i, adc_buffer[i]);
@@ -140,10 +142,11 @@ int main(void) {
         // Normalizar e aplicar filtro passa-baixa
         for (int i = 0; i < BUFFER_SIZE; i++) {
             float sample = (float)adc_buffer[i] / 4096.0f - 0.5f; // Normalizar
-            fft_input[2 * i] = lowpass_filter(sample, 2000.0f, SAMPLE_RATE);
+            fft_input[2 * i] = (float)adc_buffer[i] / 4096.0f - 0.5f;
             fft_input[2 * i + 1] = 0.0f; // Parte imaginária
         }
 
+	
         // Calcular FFT
         compute_fft(fft_input, fft_output, BUFFER_SIZE);
 	
