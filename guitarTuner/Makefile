@@ -14,7 +14,8 @@ libs/cmsis_dsp/Source/TransformFunctions/arm_bitreversal.c		\
 libs/cmsis_dsp/Source/FastMathFunctions/arm_sin_f32.c			\
 libs/cmsis_dsp/Source/CommonTables/arm_const_structs.c			\
 libs/cmsis_dsp/Source/TransformFunctions/arm_bitreversal2.c		\
-libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_radix8_f32.c
+libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_radix8_f32.c 		\
+libs/cmsis_dsp/Source/TransformFunctions/arm_rfft_fast_init_f32.c
 
 # TODO - you will need to edit these two lines!
 DEVICE=stm32f411ce
@@ -30,3 +31,7 @@ OPENCM3_DIR=../libopencm3
 include $(OPENCM3_DIR)/mk/genlink-config.mk
 include ../rules.mk
 include $(OPENCM3_DIR)/mk/genlink-rules.mk
+
+flashbin:
+	st-flash write main.bin 0x8000000
+
