@@ -17,7 +17,10 @@
 uint16_t adc_buffer[BUFFER_SIZE];
 float fft_input[BUFFER_SIZE * 2]; // Interleaved real and imaginary parts
 float fft_output[BUFFER_SIZE];
+float magnitude[BUFFER_SIZE / 2]; 
+float dominantFreq = 0;
 
+arm_rfft_fast_instance_f32 fft_instance;
 
 void adc_setup(void) {
 
@@ -32,7 +35,7 @@ void adc_setup(void) {
     adc_set_resolution(ADC1, ADC_CR1_RES_12BIT);
     adc_disable_scan_mode(ADC1);
     adc_set_single_conversion_mode(ADC1);
-    adc_set_sample_time_on_all_channels(ADC1, ADC_SMPR_SMP_480CYC);
+    adc_set_sample_time_on_all_channels(ADC1, ADC_SMPR_SMP_3CYC);
     adc_power_on(ADC1);
 
 
@@ -70,27 +73,25 @@ void usart_send_string(const char *str) {
     }
 }
 
+
 void compute_fft(float *input, float *output, int buffer_size) {
-    arm_cfft_instance_f32 fft_instance;
-
-
-    if (arm_cfft_init_f32(&fft_instance, buffer_size) != ARM_MATH_SUCCESS) {
-
-        return;
-    }
-
-
-    arm_cfft_f32(&fft_instance, input, 0, 1);
     
 
-    arm_cmplx_mag_f32(input, output, buffer_size);
-}
 
-float lowpass_filter(float input, float cutoff_freq, float sample_rate) {
-    static float prev_output = 0.0f;
-    float alpha = cutoff_freq / (cutoff_freq + sample_rate / (2.0f * PI));
-    prev_output = alpha * input + (1 - alpha) * prev_output;
-    return prev_output;
+    arm_rfft_fast_init_f32(&fft_instance, buffer_size);
+
+
+    arm_rfft_fast_f32(&fft_instance, input, output, 0);
+    
+
+    arm_cmplx_mag_f32(output, magnitude, buffer_size/2);
+
+    /* float maxValue; */
+    /* uint32_t maxIndex; */
+    /* arm_max_f32(magnitude, BUFFER_SIZE / 2, &maxValue, &maxIndex); */
+
+    /* // Converte índice para frequência */
+
 }
 
 
@@ -138,8 +139,8 @@ int main(void) {
 
 
         for (int i = 0; i < BUFFER_SIZE; i++) {
-            float sample = (float)adc_buffer[i] / 4096.0f - 0.5f; 
-            fft_input[2 * i] = (float)adc_buffer[i] / 4096.0f - 0.5f;
+	    float sample = ((float)adc_buffer[i] / 4096.0f) * 3.3f - 1.65f;
+            fft_input[2 * i] = sample;
             fft_input[2 * i + 1] = 0.0f; 
         }
 
@@ -147,11 +148,14 @@ int main(void) {
 
         compute_fft(fft_input, fft_output, BUFFER_SIZE);
 	
+	for (int i = 0; i < 10; i++) {
+	    snprintf(output_buffer, sizeof(output_buffer), "MAG[%d]: %.2f\r\n", i, magnitude[i]);
+	    usart_send_string(output_buffer);
+	} 
+        float fundamental_frequency = find_fundamental_frequency(magnitude, BUFFER_SIZE);
 
-        float fundamental_frequency = find_fundamental_frequency(fft_output, BUFFER_SIZE);
 
-
-        snprintf(output_buffer, sizeof(output_buffer), "Freq: %.2f Hz\r\n", fundamental_frequency);
+        snprintf(output_buffer, sizeof(output_buffer), "Freq: %.2f Hz\r\n", dominantFreq);
         usart_send_string(output_buffer);
 	
     }
