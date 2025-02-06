@@ -29,7 +29,7 @@
 # No support for BMP/texane/random flash methods, no plans either
 # No support for magically finding the library.
 # C++ hasn't been actually tested with this..... sorry bout that. ;)
-# Second expansion/secondary not set, add this if you need them.
+# Second expansion/ry not set, add this if you need them.
 
 BUILD_DIR ?= bin
 OPT ?= -Os
@@ -77,6 +77,10 @@ TGT_CFLAGS += -Wredundant-decls -Wstrict-prototypes -Wmissing-prototypes
 
 TGT_CFLAGS += -mfpu=fpv4-sp-d16 -mfloat-abi=hard -DARM_MATH_CM4
 
+TGT_CFLAGS +=
+-DARM_FFT_ALLOW_TABLES \
+	  -DARM_TABLE_TWIDDLECOEF_F32_2048 -DARM_TABLE_BITREVIDX_FLT_2048 -DARM_TABLE_TWIDDLECOEF_RFFT_F32_4096
+
 TGT_CXXFLAGS += $(OPT) $(CXXSTD) -ggdb3
 TGT_CXXFLAGS += $(ARCH_FLAGS)
 TGT_CXXFLAGS += -fno-common
@@ -90,6 +94,7 @@ TGT_LDFLAGS += $(ARCH_FLAGS)
 TGT_LDFLAGS += -specs=nano.specs
 TGT_LDFLAGS += -Wl,--gc-sections
 TGT_LDFLAGS += -mfpu=fpv4-sp-d16 -mfloat-abi=hard -DARM_MATH_CM4
+
 
 # OPTIONAL
 #TGT_LDFLAGS += -Wl,-Map=$(PROJECT).map
