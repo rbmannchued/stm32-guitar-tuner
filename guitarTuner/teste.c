@@ -11,13 +11,22 @@
 #include <stdint.h>
 
 #define OVER_FRAME_LEN 4096
+#define MAX_FRAME_LEN 4096
 #define FFT_SIZE 1024
 
-static volatile float32_t samples[OVER_FRAME_LEN/2];
-static volatile int full_samples_frame = 0;
+#define ADC_UINT12_MAX 4095
+#define ADC_UINT12_ZERO_VAL 2047.5
+#define ADC_UINT12_MIN_NEG -2047.5
+#define ADC_UINT12_MAX_POS  2047.5
+
+static volatile float32_t samples[OVER_FRAME_LEN * 2];
+static volatile float32_t*volatile full_samples_frame = NULL;
 static volatile uint16_t adc_value = 0;
 
+#define ADC_DR_DATA_MASK 0x00000fff
 
+
+static arm_rfft_fast_instance_f32 fft_instance;
 
 void uart_init(void) {
     rcc_periph_clock_enable(RCC_GPIOA);
@@ -56,25 +65,69 @@ static void timer_init(void) {
     timer2_set_sampling_rate();
 }
 
-void adc_isr(void) {
-    static int i = 0;
-
-    // Verifica se a interrupção foi causada pelo fim da conversão (EOC)
-    if (ADC_SR(ADC1) & ADC_SR_EOC) {
-        adc_value = adc_read_regular(ADC1); // Lê o valor do ADC
-        samples[i] = (float32_t) adc_value;
-        i++;
-
-        if (i % OVER_FRAME_LEN == 0) {
-            full_samples_frame = 1;
-            if (i == OVER_FRAME_LEN * 2)
-                i = 0;
-        }
-
-        // Limpa a flag EOC
-        ADC_SR(ADC1) &= ~ADC_SR_EOC;
-    }
+float32_t convert_adc_u12_sample_to_s16(uint16_t u12_sample)
+{
+	float32_t diff_from_zero, s16_sample;
+	static const float32_t scale_to_neg_int16 = INT16_MIN/ADC_UINT12_MIN_NEG;
+	static const float32_t scale_to_pos_int16 = INT16_MAX/ADC_UINT12_MAX_POS;
+	
+	/* 
+	 * The microphone has a DC bias of VCC/2 = 3.3/2 = 1.65V, i.e. the 
+	 * "zero" value is at 1.65V: all readings below 1.65V are negative 
+	 * numbers, and all above are positive. The 12-bit encoded value
+	 * of 3.3V is ADC_UINT12_MAX, so the 12-bit encoded value of 1.65V is
+	 * half ADC_UINT12_MAX (or ADC_UINT12_ZERO_VAL).
+	 */
+	if (u12_sample < ADC_UINT12_ZERO_VAL) {
+		/* Sample is a negative number. */
+		diff_from_zero = -(ADC_UINT12_ZERO_VAL-u12_sample);
+		s16_sample = diff_from_zero*scale_to_neg_int16;
+	} else {
+		/* Sample is a positive number. */
+		diff_from_zero = u12_sample-ADC_UINT12_ZERO_VAL;
+		s16_sample = diff_from_zero*scale_to_pos_int16;
+	}
+	return s16_sample;
 }
+
+
+/* void adc_isr(void) { */
+/*     static int i = 0; */
+
+/*     // Verifica se a interrupção foi causada pelo fim da conversão (EOC) */
+/*     if (ADC_SR(ADC1) & ADC_SR_EOC) { */
+/*         adc_value = adc_read_regular(ADC1); // Lê o valor do ADC */
+/*         samples[i] = (float32_t) adc_value; */
+/*         i++; */
+
+/*         if (i % OVER_FRAME_LEN == 0) { */
+/*             full_samples_frame = samples + (i - OVER_FRAME_LEN); */
+/*             if (i == OVER_FRAME_LEN * 2) */
+/*                 i = 0; */
+/*         } */
+
+/*         // Limpa a flag EOC */
+/*         ADC_SR(ADC1) &= ~ADC_SR_EOC; */
+/*     } */
+/* } */
+
+void adc_isr(void) 
+{
+	static int i = 0;
+
+	samples[i++] = convert_adc_u12_sample_to_s16(adc_read_regular(ADC1)&ADC_DR_DATA_MASK);
+	char buffMsg[50];
+	snprintf(buffMsg, sizeof(buffMsg), "adc: %u \r\n", raw_adc_value);
+	usart_send_string(buffMsg);
+
+	/* If just finished filling a frame of samples. */
+	if (i%OVER_FRAME_LEN == 0) {
+		full_samples_frame = samples+(i-OVER_FRAME_LEN);
+		if (i == OVER_FRAME_LEN*2)
+			i = 0;
+	}
+}
+
 
 static void adc_init(void) {
     const uint8_t adc_channel = 1;
@@ -102,6 +155,40 @@ void usart_send_string(const char *str) {
     }
 }
 
+/* float32_t *samples_to_freq_bin_magnitudes(float32_t *samples, enum frame_length frame_len) */
+/* { */
+/* 	/\* */
+/* 	 * Each processing step below interleaves between using `buf` and `samples` as input/output */
+/* 	 * buffers instead of allocating memory for each, in order to save MCU RAM space. */
+/* 	 *\/ */
+/* 	static float32_t buf[MAX_FRAME_LEN];  */
+/* 	float32_t *filtered_samples = buf; */
+/* 	float32_t *fft_complex_nrs, *freq_bin_magnitudes; */
+
+/* 	/\* Apply band-pass filter and decimate down from the OVERSAMPLING_RATE to SAMPLING_RATE. *\/ */
+/* //	arm_fir_decimate_f32(&fir_decimate_instance, samples, filtered_samples, OVERSAMPLING_FACTOR*frame_len); */
+/* 	/\* Convert from time domain to frequency domain. *\/ */
+/* 	fft_complex_nrs = samples; */
+/* 	arm_rfft_fast_f32(&fft_instance, filtered_samples, fft_complex_nrs, 0); */
+/* 	/\*  */
+/* 	 * Zero the first complex number because it's the DC offset and value at the Nyquist frequency  */
+/* 	 * masquerading as a complex number. */
+/* 	 *\/ */
+/* 	fft_complex_nrs[0] = fft_complex_nrs[1] = 0; */
+/* 	/\*  */
+/* 	 * Get the energy of the spectra. Use regular mag over mag squared because the numbers mag */
+/* 	 * squared ouput are too big and cause the result of HPS to overflow and give wrong results.  */
+/* 	 *\/ */
+/* 	freq_bin_magnitudes = buf; */
+/* 	arm_cmplx_mag_f32(fft_complex_nrs, freq_bin_magnitudes, MAX_NR_BINS); */
+/* 	return freq_bin_magnitudes; */
+/* } */
+
+void fft_init(){
+    
+    arm_rfft_fast_init_f32(&fft_instance, OVER_FRAME_LEN);
+    
+}
 
 
 int main(void) {
@@ -111,7 +198,7 @@ int main(void) {
     timer_init();
     adc_init();
     timer_enable_counter(TIM2);
-
+    fft_init();
 
 
 
