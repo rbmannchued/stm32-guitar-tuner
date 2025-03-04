@@ -14,8 +14,9 @@
 
 #include <libopencm3/stm32/usart.h>
 
-#define FRAME_LEN 1024
+#define FRAME_LEN 4096
 #define SAMPLE_RATE 40000  // Defina a taxa de amostragem do seu ADC
+#define NUM_TAPS 64
 
 volatile uint32_t sample_count = 0;
 volatile uint32_t last_time = 0;
@@ -28,6 +29,14 @@ static volatile int frame_ready = 0;
 float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)
 float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
+
+
+
+const float fir_coeffs[NUM_TAPS] = {-0.001266, -0.001347, -0.001482, -0.001665, -0.001880, -0.002102, -0.002296, -0.002419, -0.002422, -0.002249, -0.001845, -0.001153, -0.000124, 0.001286, 0.003111, 0.005372, 0.008072, 0.011199, 0.014723, 0.018596, 0.022751, 0.027109, 0.031573, 0.036038, 0.040392, 0.044522, 0.048313, 0.051660, 0.054464, 0.056645, 0.058136, 0.058893, 0.058893, 0.058136, 0.056645, 0.054464, 0.051660, 0.048313, 0.044522, 0.040392, 0.036038, 0.031573, 0.027109, 0.022751, 0.018596, 0.014723, 0.011199, 0.008072, 0.005372, 0.003111, 0.001286, -0.000124, -0.001153, -0.001845, -0.002249, -0.002422, -0.002419, -0.002296, -0.002102, -0.001880, -0.001665, -0.001482, -0.001347, -0.001266};
+
+float fir_state[NUM_TAPS + FRAME_LEN];
+arm_fir_instance_f32 fir;
+
 
 void adc_isr(void) {
     if (adc_eoc(ADC1)) {
@@ -84,7 +93,8 @@ void process_fft(void) {
         float window = 0.54f - 0.46f * cosf(2 * PI * i / (FRAME_LEN - 1)); // Hamming window
         input_fft[i * 2] *= window;
     }
-
+    arm_fir_f32(&fir, input_fft, input_fft, FRAME_LEN);
+    
     // Executar FFT
     arm_rfft_fast_f32(&fft_instance, input_fft, output_fft, 0);
 
@@ -178,6 +188,7 @@ int main(void) {
     timer_init();
 
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
+    arm_fir_init_f32(&fir, NUM_TAPS, fir_coeffs, fir_state, FRAME_LEN);
     usart_send_string("inicio do codigo\r\n");
     char msg[50];
     
