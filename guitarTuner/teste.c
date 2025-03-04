@@ -15,7 +15,7 @@
 #include <libopencm3/stm32/usart.h>
 
 #define FRAME_LEN 4096
-#define SAMPLE_RATE 40000  // Defina a taxa de amostragem do seu ADC
+#define SAMPLE_RATE 8000  // Defina a taxa de amostragem do seu ADC
 #define NUM_TAPS 64
 
 volatile uint32_t sample_count = 0;
@@ -32,7 +32,7 @@ arm_rfft_fast_instance_f32 fft_instance;
 
 
 
-const float fir_coeffs[NUM_TAPS] = {-0.001266, -0.001347, -0.001482, -0.001665, -0.001880, -0.002102, -0.002296, -0.002419, -0.002422, -0.002249, -0.001845, -0.001153, -0.000124, 0.001286, 0.003111, 0.005372, 0.008072, 0.011199, 0.014723, 0.018596, 0.022751, 0.027109, 0.031573, 0.036038, 0.040392, 0.044522, 0.048313, 0.051660, 0.054464, 0.056645, 0.058136, 0.058893, 0.058893, 0.058136, 0.056645, 0.054464, 0.051660, 0.048313, 0.044522, 0.040392, 0.036038, 0.031573, 0.027109, 0.022751, 0.018596, 0.014723, 0.011199, 0.008072, 0.005372, 0.003111, 0.001286, -0.000124, -0.001153, -0.001845, -0.002249, -0.002422, -0.002419, -0.002296, -0.002102, -0.001880, -0.001665, -0.001482, -0.001347, -0.001266};
+const float fir_coeffs[64] = {-0.001192, -0.001687, -0.001821, -0.001461, -0.000716, -0.000047, -0.000156, -0.001574, -0.004129, -0.006719, -0.007750, -0.006167, -0.002503, 0.000897, 0.000955, -0.004113, -0.013037, -0.021367, -0.023597, -0.016692, -0.002979, 0.009778, 0.011936, -0.002176, -0.029273, -0.056255, -0.064940, -0.040747, 0.018804, 0.100441, 0.178891, 0.226882, 0.226882, 0.178891, 0.100441, 0.018804, -0.040747, -0.064940, -0.056255, -0.029273, -0.002176, 0.011936, 0.009778, -0.002979, -0.016692, -0.023597, -0.021367, -0.013037, -0.004113, 0.000955, 0.000897, -0.002503, -0.006167, -0.007750, -0.006719, -0.004129, -0.001574, -0.000156, -0.000047, -0.000716, -0.001461, -0.001821, -0.001687, -0.001192};
 
 float fir_state[NUM_TAPS + FRAME_LEN];
 arm_fir_instance_f32 fir;
@@ -76,6 +76,7 @@ void systick_setup(void) {
 
 void process_fft(void) {
     // Calcular a média do sinal (offset DC)
+    char msg[50];
     float mean = 0.0f;
     for (int i = 0; i < FRAME_LEN; i++) {
         mean += (float)adc_buffer[i] / 4096.0f;
@@ -93,9 +94,10 @@ void process_fft(void) {
         float window = 0.54f - 0.46f * cosf(2 * PI * i / (FRAME_LEN - 1)); // Hamming window
         input_fft[i * 2] *= window;
     }
-    arm_fir_f32(&fir, input_fft, input_fft, FRAME_LEN);
+    //arm_fir_f32(&fir, input_fft, input_fft, FRAME_LEN);
     
     // Executar FFT
+
     arm_rfft_fast_f32(&fft_instance, input_fft, output_fft, 0);
 
     // Calcula magnitude da FFT (ignorando índice 0 e primeiros índices)
@@ -119,15 +121,16 @@ void process_fft(void) {
     float frequency = (float)max_index * SAMPLE_RATE / FRAME_LEN;
 
     // Enviar para UART
-    char msg[50];
-    snprintf(msg, sizeof(msg), "Freq: %.2f Hz\r\n", frequency);
+    snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz\r\n", max_index, frequency);
+    
+    //snprintf(msg, sizeof(msg), "Freq: %.2f Hz\r\n", frequency);
     usart_send_string(msg);
 }
 
 static void timer_init(void) {
     rcc_periph_clock_enable(RCC_TIM2);
-    timer_set_prescaler(TIM2, 41);
-    timer_set_period(TIM2, 49);
+    timer_set_prescaler(TIM2, 104);
+    timer_set_period(TIM2, 99);
     timer_generate_event(TIM2, TIM_EGR_UG);
     timer_clear_flag(TIM2, TIM_EGR_UG);
     timer_set_master_mode(TIM2, TIM_CR2_MMS_UPDATE);
