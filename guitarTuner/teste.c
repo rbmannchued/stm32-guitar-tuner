@@ -92,26 +92,35 @@ void process_fft(void) {
         input_fft[i * 2] *= window;
     }
 
-    
     // Executar FFT
-
     arm_rfft_fast_f32(&fft_instance, input_fft, output_fft, 0);
 
-
-    
     // Calcula magnitude da FFT (ignorando índice 0 e primeiros índices)
-
     arm_cmplx_mag_f32(output_fft, magnitude_fft, FRAME_LEN / 2);
 
-    
+    // Aplicar Harmonic Product Spectrum (HPS)
+    int hps_len = FRAME_LEN / 2;
+    float hps_result[hps_len];
+
+    for (int i = 0; i < hps_len; i++) {
+        hps_result[i] = magnitude_fft[i];
+    }
+
+    // Decimar e multiplicar
+     for (int decimation = 2; decimation <= 2; decimation++) {
+        for (int i = 0; i < hps_len / decimation; i++) {
+            hps_result[i] *= magnitude_fft[i * decimation];
+        }
+    }
+
+    // Encontrar o pico máximo
     float max_value = 0.0f;
     int max_index = 0;
     int start_index = 5;  // Ignorar os primeiros 5 índices
 
-    
-    for (int i = start_index; i < FRAME_LEN / 2; i++) {
-        if (magnitude_fft[i] > max_value) {
-            max_value = magnitude_fft[i];
+    for (int i = start_index; i < hps_len; i++) {
+        if (hps_result[i] > max_value) {
+            max_value = hps_result[i];
             max_index = i;
         }
     }
@@ -126,8 +135,6 @@ void process_fft(void) {
 
     // Enviar para UART
     snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz\r\n", max_index, frequency);
-    
-    //snprintf(msg, sizeof(msg), "Freq: %.2f Hz\r\n", frequency);
     usart_send_string(msg);
 }
 
