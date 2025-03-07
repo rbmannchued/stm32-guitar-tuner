@@ -1,21 +1,58 @@
 
-Makefile,228
+teste.c,1270
+#define FRAME_LEN FRAME_LEN17,367
+#define SAMPLE_RATE SAMPLE_RATE18,390
+#define NUM_TAPS NUM_TAPS19,458
+volatile uint32_t sample_count = 0;sample_count21,479
+volatile uint32_t last_time = 0;last_time22,515
+volatile uint32_t ms_counter = 0;ms_counter23,548
+static volatile uint16_t adc_buffer[FRAME_LEN];adc_buffer25,583
+static volatile int buffer_index = 0;buffer_index26,631
+static volatile int frame_ready = 0;frame_ready27,669
+float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)input_fft29,707
+float output_fft[FRAME_LEN];      // Magnitude da FFToutput_fft30,781
+arm_rfft_fast_instance_f32 fft_instance;fft_instance31,835
+const float fir_coeffs[64] = {-0.001192, -0.001687, -0.001821, -0.001461, -0.000716, -0.000047, fir_coeffs35,879
+void adc_isr(void) {adc_isr39,1601
+void sys_tick_handler(void) {sys_tick_handler52,1852
+void check_sample_rate(void) {check_sample_rate56,1903
+void systick_setup(void) {systick_setup68,2263
+void process_fft(void) {process_fft74,2462
+static void timer_init(void) {timer_init133,4173
+void uart_init(void) {uart_init143,4483
+void usart_send_string(const char *str) {usart_send_string164,5025
+static void adc_init(void) {adc_init170,5140
+int main(void) {main187,5756
+
+testeClock.c,28
+int main(void) {main5,106
+
+Makefile,259
 PROJECT = mainPROJECT1,0
 BUILD_DIR = binBUILD_DIR2,15
-CFILES = my-project.c \CFILES4,32
-DEVICE=stm32f411ceDEVICE15,646
-OOCD_FILE = board/stm32f4discovery.cfgOOCD_FILE16,665
-OPENCM3_DIR=../libopencm3OPENCM3_DIR22,885
+CFILES = teste.c							\CFILES4,32
+DEVICE=stm32f411ceDEVICE25,1166
+OOCD_FILE = board/stm32f4discovery.cfgOOCD_FILE26,1185
+OPENCM3_DIR=../libopencm3OPENCM3_DIR33,1448
+flashbin:flashbin39,1583
 
 TAGS,0
 
-bin/my-project.d,0
-
 bin/libs/cmsis_dsp/Source/ComplexMathFunctions/arm_cmplx_mag_f32.d,0
+
+bin/libs/cmsis_dsp/Source/FastMathFunctions/arm_sin_f32.d,0
+
+bin/libs/cmsis_dsp/Source/FastMathFunctions/arm_cos_f32.d,0
 
 bin/libs/cmsis_dsp/Source/CommonTables/arm_common_tables.d,0
 
+bin/libs/cmsis_dsp/Source/CommonTables/arm_const_structs.d,0
+
 bin/libs/cmsis_dsp/Source/StatisticsFunctions/arm_max_f32.d,0
+
+bin/libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_radix8_f32.d,0
+
+bin/libs/cmsis_dsp/Source/TransformFunctions/arm_bitreversal2.d,0
 
 bin/libs/cmsis_dsp/Source/TransformFunctions/arm_rfft_fast_f32.d,0
 
@@ -25,23 +62,42 @@ bin/libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_radix4_init_f32.d,0
 
 bin/libs/cmsis_dsp/Source/TransformFunctions/arm_bitreversal.d,0
 
+bin/libs/cmsis_dsp/Source/TransformFunctions/arm_rfft_fast_init_f32.d,0
+
 bin/libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_init_f32.d,0
+
+bin/libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_f32.d,0
+
+bin/libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_decimate_init_f32.d,0
+
+bin/libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_f32.d,0
+
+bin/libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_init_f32.d,0
+
+bin/libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_decimate_f32.d,0
+
+bin/teste.d,0
 
 main.elf,0
 
 main.bin,0
 
-my-project.c,686
-#define SAMPLE_RATE SAMPLE_RATE8,150
-#define BUFFER_SIZE BUFFER_SIZE9,176
-float ks_buffer[BUFFER_SIZE];ks_buffer12,240
-float fft_input[BUFFER_SIZE * 2]; // Interleaved real and imaginary partsfft_input13,270
-float fft_output[BUFFER_SIZE];fft_output14,344
-void karplus_strong_init(float *buffer, int buffer_size, float frequency) {karplus_strong_init17,409
-float karplus_strong_step(float *buffer, int buffer_size, int *idx) {karplus_strong_step29,786
-void compute_fft(float *input, float *output, int buffer_size) {compute_fft38,1057
-float find_fundamental_frequency(float *fft_output, int buffer_size) {find_fundamental_frequency46,1364
-int main(void) {main58,1742
+my-project.c,882
+#define SAMPLE_RATE SAMPLE_RATE13,271
+#define BUFFER_SIZE BUFFER_SIZE14,296
+uint16_t adc_buffer[BUFFER_SIZE];adc_buffer17,323
+float fft_input[BUFFER_SIZE * 2]; // Interleaved real and imaginary partsfft_input18,357
+float fft_output[BUFFER_SIZE];fft_output19,431
+float magnitude[BUFFER_SIZE / 2]; magnitude20,462
+float dominantFreq = 0;dominantFreq21,497
+arm_rfft_fast_instance_f32 fft_instance;fft_instance23,522
+void adc_setup(void) {adc_setup25,564
+void usart_setup(void) {usart_setup48,1054
+void usart_send_string(const char *str) {usart_send_string70,1599
+void compute_fft(float *input, float *output, int buffer_size) {compute_fft77,1715
+float find_fundamental_frequency(float *fft_output, int buffer_size) {find_fundamental_frequency98,2146
+void capture_adc_data(uint16_t *buffer, int size) {capture_adc_data111,2501
+int main(void) {main119,2720
 
 generated.stm32f411ce.ld,699
  ram (rwx) : ORIGIN = 0x20000000, LENGTH = 128KORIGIN5,51
@@ -60,6 +116,18 @@ generated.stm32f411ce.ld,699
   _ebss = .;_ebss63,1061
  end = .;end67,1127
 PROVIDE(_stack = ORIGIN(ram) + LENGTH(ram));_stack69,1139
+
+my-projectOld.c,686
+#define SAMPLE_RATE SAMPLE_RATE8,150
+#define BUFFER_SIZE BUFFER_SIZE9,176
+float ks_buffer[BUFFER_SIZE];ks_buffer12,240
+float fft_input[BUFFER_SIZE * 2]; // Interleaved real and imaginary partsfft_input13,270
+float fft_output[BUFFER_SIZE];fft_output14,344
+void karplus_strong_init(float *buffer, int buffer_size, float frequency) {karplus_strong_init17,409
+float karplus_strong_step(float *buffer, int buffer_size, int *idx) {karplus_strong_step29,786
+void compute_fft(float *input, float *output, int buffer_size) {compute_fft38,1057
+float find_fundamental_frequency(float *fft_output, int buffer_size) {find_fundamental_frequency46,1364
+int main(void) {main58,1742
 
 libs/kissfft/_kiss_fft_guts.h,1882
 #define _kiss_fft_guts_h_kiss_fft_guts_h15,428
@@ -3613,9 +3681,9 @@ ARM_DSP_ATTRIBUTE void arm_power_q7(arm_power_q756,2095
 ARM_DSP_ATTRIBUTE void arm_power_q7(arm_power_q799,2973
 
 libs/cmsis_dsp/Source/StatisticsFunctions/arm_max_f32.c,170
-ARM_DSP_ATTRIBUTE void arm_max_f32(arm_max_f3260,1889
-ARM_DSP_ATTRIBUTE void arm_max_f32(arm_max_f32145,3906
-ARM_DSP_ATTRIBUTE void arm_max_f32(arm_max_f32262,6792
+ARM_DSP_ATTRIBUTE void arm_max_f32(arm_max_f3260,1891
+ARM_DSP_ATTRIBUTE void arm_max_f32(arm_max_f32145,3908
+ARM_DSP_ATTRIBUTE void arm_max_f32(arm_max_f32262,6794
 
 libs/cmsis_dsp/Source/StatisticsFunctions/arm_rms_f32.c,169
 ARM_DSP_ATTRIBUTE void arm_rms_f32(arm_rms_f3261,1887
@@ -3684,6 +3752,8 @@ ARM_DSP_ATTRIBUTE void arm_max_f64(arm_max_f6447,1467
 
 libs/cmsis_dsp/Source/StatisticsFunctions/arm_std_f16.c,56
 ARM_DSP_ATTRIBUTE void arm_std_f16(arm_std_f1651,1493
+
+libs/cmsis_dsp/Source/StatisticsFunctions/#arm_max_f32.c#,0
 
 libs/cmsis_dsp/Source/StatisticsFunctions/arm_absmax_f16.c,189
 ARM_DSP_ATTRIBUTE void arm_absmax_f16(arm_absmax_f1658,1770
@@ -23677,42 +23747,6 @@ const SSD1306_Font_t Font_11x18 = {11, 18, Font11x18, NULL};Font_11x18904,8120
 const SSD1306_Font_t Font_16x26 = {16, 26, Font16x26, NULL};Font_16x26907,81304
 const SSD1306_Font_t Font_16x24 = {16, 24, Font16x24, NULL};Font_16x24912,81442
 const SSD1306_Font_t Font_16x15 = {16, 15, Font16x15, char_width};Font_16x15920,81710
-
-../.gitmodules,0
-
-../rules.mk,1171
-BUILD_DIR ?= binBUILD_DIR34,1477
-OPT ?= -OsOPT35,1494
-CSTD ?= -std=c99CSTD36,1505
-V?=0V40,1654
-Q	:= @Q42,1673
-NULL	:= 2>/dev/nullNULL43,1680
-PREFIX	?= arm-none-eabi-PREFIX47,1721
-CC	= $(PREFIX)gccCC48,1746
-CXX	= $(PREFIX)g++CXX49,1764
-OBJCOPY	= $(PREFIX)objcopyOBJCOPY51,1801
-OBJDUMP	= $(PREFIX)objdumpOBJDUMP52,1828
-OOCD	?= openocdOOCD53,1855
-OPENCM3_INC = $(OPENCM3_DIR)/includeOPENCM3_INC55,1872
-OBJS = $(CFILES:%.c=$(BUILD_DIR)/%.o)OBJS62,2097
-GENERATED_BINS = $(PROJECT).elf $(PROJECT).bin $(PROJECT).map $(PROJECT).list $(PROJECT).lssGENERATED_BINS65,2217
-%: %,v%113,3833
-%: RCS/%,v%114,3840
-%: RCS/%%115,3851
-%: s.%%116,3860
-%: SCCS/s.%%117,3867
-all: $(PROJECT).elf $(PROJECT).binall119,3880
-flash: $(PROJECT).flashflash120,3915
-$(LDSCRIPT):$(LDSCRIPT)124,4003
-$(BUILD_DIR)/%.o: %.c$(BUILD_DIR)/%.o134,4264
-$(BUILD_DIR)/%.o: %.cxx$(BUILD_DIR)/%.o139,4405
-$(BUILD_DIR)/%.o: %.S$(BUILD_DIR)/%.o144,4554
-$(PROJECT).elf: $(OBJS) $(LDSCRIPT) $(LIBDEPS)$(PROJECT).elf149,4697
-%.bin: %.elf%.bin153,4828
-%.lss: %.elf%.lss157,4902
-%.list: %.elf%.list160,4942
-%.flash: %.elf%.flash163,4980
-clean:clean178,5497
 
 ../libopencm3/doc/samd/doxy.custom,0
 
@@ -74472,3 +74506,37 @@ void rcc_clock_setup_pll(const struct rcc_clock_scale *clock)rcc_clock_setup_pl
 void rcc_backupdomain_reset(void)rcc_backupdomain_reset644,16519
 
 ../libopencm3/COPYING.GPL3,0
+
+../rules.mk,1171
+BUILD_DIR ?= binBUILD_DIR34,1470
+OPT ?= -OsOPT35,1487
+CSTD ?= -std=c99CSTD36,1498
+V?=0V40,1647
+Q	:= @Q42,1666
+NULL	:= 2>/dev/nullNULL43,1673
+PREFIX	?= arm-none-eabi-PREFIX47,1714
+CC	= $(PREFIX)gccCC48,1739
+CXX	= $(PREFIX)g++CXX49,1757
+OBJCOPY	= $(PREFIX)objcopyOBJCOPY51,1794
+OBJDUMP	= $(PREFIX)objdumpOBJDUMP52,1821
+OOCD	?= openocdOOCD53,1848
+OPENCM3_INC = $(OPENCM3_DIR)/includeOPENCM3_INC55,1865
+OBJS = $(CFILES:%.c=$(BUILD_DIR)/%.o)OBJS62,2090
+GENERATED_BINS = $(PROJECT).elf $(PROJECT).bin $(PROJECT).map $(PROJECT).list $(PROJECT).lssGENERATED_BINS65,2210
+%: %,v%115,3828
+%: RCS/%,v%116,3835
+%: RCS/%%117,3846
+%: s.%%118,3855
+%: SCCS/s.%%119,3862
+all: $(PROJECT).elf $(PROJECT).binall121,3875
+flash: $(PROJECT).flashflash122,3910
+$(LDSCRIPT):$(LDSCRIPT)126,3998
+$(BUILD_DIR)/%.o: %.c$(BUILD_DIR)/%.o136,4259
+$(BUILD_DIR)/%.o: %.cxx$(BUILD_DIR)/%.o141,4400
+$(BUILD_DIR)/%.o: %.S$(BUILD_DIR)/%.o146,4549
+$(PROJECT).elf: $(OBJS) $(LDSCRIPT) $(LIBDEPS)$(PROJECT).elf151,4692
+%.bin: %.elf%.bin155,4823
+%.lss: %.elf%.lss159,4897
+%.list: %.elf%.list162,4937
+%.flash: %.elf%.flash165,4975
+clean:clean180,5492

@@ -25,7 +25,7 @@ volatile uint32_t ms_counter = 0;
 static volatile uint16_t adc_buffer[FRAME_LEN];
 static volatile int buffer_index = 0;
 static volatile int frame_ready = 0;
-
+float magnitude_fft[FRAME_LEN / 2];
 float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)
 float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
@@ -34,8 +34,6 @@ arm_rfft_fast_instance_f32 fft_instance;
 
 const float fir_coeffs[64] = {-0.001192, -0.001687, -0.001821, -0.001461, -0.000716, -0.000047, -0.000156, -0.001574, -0.004129, -0.006719, -0.007750, -0.006167, -0.002503, 0.000897, 0.000955, -0.004113, -0.013037, -0.021367, -0.023597, -0.016692, -0.002979, 0.009778, 0.011936, -0.002176, -0.029273, -0.056255, -0.064940, -0.040747, 0.018804, 0.100441, 0.178891, 0.226882, 0.226882, 0.178891, 0.100441, 0.018804, -0.040747, -0.064940, -0.056255, -0.029273, -0.002176, 0.011936, 0.009778, -0.002979, -0.016692, -0.023597, -0.021367, -0.013037, -0.004113, 0.000955, 0.000897, -0.002503, -0.006167, -0.007750, -0.006719, -0.004129, -0.001574, -0.000156, -0.000047, -0.000716, -0.001461, -0.001821, -0.001687, -0.001192};
 
-float fir_state[NUM_TAPS + FRAME_LEN];
-arm_fir_instance_f32 fir;
 
 
 void adc_isr(void) {
@@ -73,7 +71,6 @@ void systick_setup(void) {
     systick_counter_enable();
     systick_interrupt_enable();
 }
-
 void process_fft(void) {
     // Calcular a média do sinal (offset DC)
     char msg[50];
@@ -94,20 +91,27 @@ void process_fft(void) {
         float window = 0.54f - 0.46f * cosf(2 * PI * i / (FRAME_LEN - 1)); // Hamming window
         input_fft[i * 2] *= window;
     }
-    //arm_fir_f32(&fir, input_fft, input_fft, FRAME_LEN);
+
     
     // Executar FFT
 
     arm_rfft_fast_f32(&fft_instance, input_fft, output_fft, 0);
 
+
+    
     // Calcula magnitude da FFT (ignorando índice 0 e primeiros índices)
+
+    arm_cmplx_mag_f32(output_fft, magnitude_fft, FRAME_LEN / 2);
+
+    
     float max_value = 0.0f;
     int max_index = 0;
     int start_index = 5;  // Ignorar os primeiros 5 índices
+
+    
     for (int i = start_index; i < FRAME_LEN / 2; i++) {
-        float magnitude = sqrtf(output_fft[i] * output_fft[i]);
-        if (magnitude > max_value) {
-            max_value = magnitude;
+        if (magnitude_fft[i] > max_value) {
+            max_value = magnitude_fft[i];
             max_index = i;
         }
     }
@@ -118,7 +122,7 @@ void process_fft(void) {
     }
 
     // Converter índice para frequência em Hz
-    float frequency = (float)max_index * SAMPLE_RATE / FRAME_LEN;
+    float frequency = (float)max_index * SAMPLE_RATE / (FRAME_LEN / 2);
 
     // Enviar para UART
     snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz\r\n", max_index, frequency);
@@ -191,7 +195,7 @@ int main(void) {
     timer_init();
 
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
-    arm_fir_init_f32(&fir, NUM_TAPS, fir_coeffs, fir_state, FRAME_LEN);
+
     usart_send_string("inicio do codigo\r\n");
     char msg[50];
     
