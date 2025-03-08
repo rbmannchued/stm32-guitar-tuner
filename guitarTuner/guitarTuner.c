@@ -1,10 +1,11 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/adc.h>
+#include <libopencm3/stm32/usart.h>
 #include <libopencm3/stm32/timer.h>
 #include <libopencm3/stm32/f4/nvic.h>
 #include <libopencm3/cm3/cortex.h>
-#include <libopencm3/cm3/systick.h>
+
 
 #include "arm_math.h"
 
@@ -12,10 +13,10 @@
 #include <stdint.h>
 #include <math.h>
 
-#include <libopencm3/stm32/usart.h>
+
 
 #define FRAME_LEN 4096
-#define SAMPLE_RATE 8000  // Defina a taxa de amostragem do seu ADC
+#define SAMPLE_RATE 4000  // Defina a taxa de amostragem do seu ADC
 #define NUM_TAPS 64
 
 volatile uint32_t sample_count = 0;
@@ -49,28 +50,6 @@ void adc_isr(void) {
     }
 }
 
-void sys_tick_handler(void) {
-    ms_counter++;
-}
-
-void check_sample_rate(void) {
-    static uint32_t last_time = 0;
-    if ((ms_counter - last_time) >= 1000) {  // 1000ms = 1 segundo
-        char msg[50];
-        snprintf(msg, sizeof(msg), "Amostras por segundo: %lu\r\n", sample_count);
-        usart_send_string(msg);
-        sample_count = 0;  // Reseta o contador
-        last_time = ms_counter;
-    }
-}
-
-
-void systick_setup(void) {
-    systick_set_reload(84000);  // 1ms (84MHz / 84.000)
-    systick_set_clocksource(STK_CSR_CLKSOURCE_AHB);
-    systick_counter_enable();
-    systick_interrupt_enable();
-}
 void process_fft(void) {
     // Calcular a média do sinal (offset DC)
     char msg[50];
@@ -140,7 +119,7 @@ void process_fft(void) {
 
 static void timer_init(void) {
     rcc_periph_clock_enable(RCC_TIM2);
-    timer_set_prescaler(TIM2, 104);
+    timer_set_prescaler(TIM2, 209);
     timer_set_period(TIM2, 99);
     timer_generate_event(TIM2, TIM_EGR_UG);
     timer_clear_flag(TIM2, TIM_EGR_UG);
@@ -194,7 +173,6 @@ static void adc_init(void) {
 
 int main(void) {
     rcc_clock_setup_pll(&rcc_hse_25mhz_3v3[RCC_CLOCK_3V3_84MHZ]);
-    systick_setup();
     cm_enable_interrupts();
     
     adc_init();
@@ -208,7 +186,6 @@ int main(void) {
     
 
     while (1) {
-        check_sample_rate();  // Checar a taxa de amostragem
         if (frame_ready) {
             process_fft();
             frame_ready = 0;
