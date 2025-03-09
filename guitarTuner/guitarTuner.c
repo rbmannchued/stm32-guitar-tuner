@@ -8,6 +8,9 @@
 
 
 #include "arm_math.h"
+//#include "notes.h"
+#include "ssd1306.h"
+#include "ssd1306_fonts.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -17,7 +20,7 @@
 
 #define FRAME_LEN 4096
 #define SAMPLE_RATE 4000  // Defina a taxa de amostragem do seu ADC
-#define NUM_TAPS 64
+//#define NUM_TAPS 64
 
 volatile uint32_t sample_count = 0;
 volatile uint32_t last_time = 0;
@@ -31,15 +34,130 @@ float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)
 float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
 
+const char *noteNames[] = {"A","A#","B","C","C#","D","D#","E","F","F#","G","G#"};
+const double noteFrequencies[60] = {
+  55.00,  // A1
+  58.27,  // A#1
+  61.74,  // B1
+  65.41,  // C2
+  69.30,  // C#2
+  73.42,  // D2
+  77.78,  // D#2
+  82.41,  // E2
+  87.31,  // F2
+  92.50,  // F#2
+  98.00,  // G2
+  103.83, // G#2
+  110.00, // A2
+  116.54, // A#2
+  123.47, // B2
+  130.81, // C3
+  138.59, // C#3
+  146.83, // D3
+  155.56, // D#3
+  164.81, // E3
+  174.61, // F3
+  185.00, // F#3
+  196.00, // G3
+  207.65, // G#3
+  220.00, // A3
+  233.08, // A#3
+  246.94, // B3
+  261.63, // C4
+  277.18, // C#4
+  293.66, // D4
+  311.13, // D#4
+  329.63, // E4
+  349.23, // F4
+  369.99, // F#4
+  392.00, // G4
+  415.30, // G#4
+  440.00, // A4
+  466.16, // A#4
+  493.88, // B4
+  523.25, // C5
+  554.37, // C#5
+  587.33, // D5
+  622.25, // D#5
+  659.26, // E5
+  698.46, // F5
+  739.99, // F#5
+  783.99, // G5
+  830.61, // G#5
+  880.00, // A5
+  932.33, // A#5
+  987.77, // B5
+  1046.50, // C6
+  1108.73, // C#6
+  1174.66, // D6
+  1244.51, // D#6
+  1318.51, // E6
+  1396.91, // F6
+  1479.98, // F#6
+  1567.98, // G6
+  1661.22, // G#6
+  1760.00, // A6
+};
 
 
-const float fir_coeffs[64] = {-0.001192, -0.001687, -0.001821, -0.001461, -0.000716, -0.000047, -0.000156, -0.001574, -0.004129, -0.006719, -0.007750, -0.006167, -0.002503, 0.000897, 0.000955, -0.004113, -0.013037, -0.021367, -0.023597, -0.016692, -0.002979, 0.009778, 0.011936, -0.002176, -0.029273, -0.056255, -0.064940, -0.040747, 0.018804, 0.100441, 0.178891, 0.226882, 0.226882, 0.178891, 0.100441, 0.018804, -0.040747, -0.064940, -0.056255, -0.029273, -0.002176, 0.011936, 0.009778, -0.002979, -0.016692, -0.023597, -0.021367, -0.013037, -0.004113, 0.000955, 0.000897, -0.002503, -0.006167, -0.007750, -0.006719, -0.004129, -0.001574, -0.000156, -0.000047, -0.000716, -0.001461, -0.001821, -0.001687, -0.001192};
 
+const int getClosestNoteIndex(double frequency) {
+    double minDiff = 1e9;
+    int closestIndex = 0;
+  
+    for (int i = 1; i < sizeof(noteFrequencies) / sizeof(noteFrequencies[0]); i++) {
+	double diff = fabs(frequency - noteFrequencies[i]);
+	if (diff < minDiff) {
+	    minDiff = diff;
+	    closestIndex = i;
+	}
+    }
+    return closestIndex;
+    
+}
 
+const double getNoteDiff(double frequency, int closestIndex) {
+    double noteGap;
+    double frequencyGap;
 
+    if(frequency<noteFrequencies[closestIndex]){
+	noteGap = noteFrequencies[closestIndex]-noteFrequencies[closestIndex-1];
+    }else{
+	noteGap = noteFrequencies[closestIndex]-noteFrequencies[closestIndex+1];
+    }
+  
+    frequencyGap = abs(frequency-noteFrequencies[closestIndex])/noteGap*-100;
+    return (int)frequencyGap;
+}
+
+void displayResult(int noteDiff, double frequency, int noteIndex){
+    char frequencyStr[10];
+    
+    ssd1306_SetCursor(0, 10);
+    snprintf(frequencyStr,sizeof(frequencyStr),"%.2f \n",frequency);
+	  
+	     
+    ssd1306_Fill(Black);
+    ssd1306_Line(64,0,(64+(128*noteDiff/100)),0, White);
+    ssd1306_Line(64,1,(64+(128*noteDiff/100)),1, White);
+    ssd1306_Line(64,2,(64+(128*noteDiff/100)),2, White);
+    ssd1306_Line(64,3,(64+(128*noteDiff/100)),3, White);
+    ssd1306_Line(64,4,(64+(128*noteDiff/100)),4, White);
+    ssd1306_WriteString("  ",Font_11x18, White);
+    ssd1306_WriteString(frequencyStr,Font_11x18, White);
+    /* ssd1306.println("hz"); */
+    /* ssd1306.setTextSize(4); */
+    /* ssd1306.print("  "); */
+    ssd1306_WriteString(noteNames[noteIndex % 12], Font_11x18, White);
+    /* ssd1306.ssd1306(); */
+    ssd1306_UpdateScreen();
+
+}	     
+
+	
 void adc_isr(void) {
     if (adc_eoc(ADC1)) {
-	
+
         adc_buffer[buffer_index++] = adc_read_regular(ADC1);
 	sample_count++;
         if (buffer_index >= FRAME_LEN) {
@@ -52,8 +170,13 @@ void adc_isr(void) {
 
 void process_fft(void) {
     // Calcular a média do sinal (offset DC)
-    char msg[50];
+    char msg[65];
     float mean = 0.0f;
+
+    int lastNoteIndex = 0;
+    int lastNoteDiff = 0;
+    double lastFrequency = 0;
+    
     for (int i = 0; i < FRAME_LEN; i++) {
         mean += (float)adc_buffer[i] / 4096.0f;
     }
@@ -111,10 +234,47 @@ void process_fft(void) {
 
     // Converter índice para frequência em Hz
     float frequency = (float)max_index * SAMPLE_RATE / (FRAME_LEN / 2);
+    int noteIndex = getClosestNoteIndex(frequency);
+    // int noteDiff = getNoteDiff(frequency, noteIndex);
 
+        
+    if(frequency==0 || noteIndex==60 || noteIndex==0 ){
+	displayResult(lastNoteDiff, lastFrequency, lastNoteIndex);
+    }else{
+	int noteDiff = getNoteDiff(frequency, noteIndex);
+	displayResult(noteDiff, frequency, noteIndex);
+	lastNoteDiff = noteDiff;
+	lastFrequency = frequency;
+	lastNoteIndex = noteIndex;
+    }
     // Enviar para UART
-    snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz\r\n", max_index, frequency);
+    snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz, nota mais prox: %d \r\n", max_index, frequency, noteIndex);
     usart_send_string(msg);
+}
+
+
+void i2c_setup(void) {
+    /* enable clock for GPIOB and I2C1 */
+    rcc_periph_clock_enable(RCC_GPIOB);
+    rcc_periph_clock_enable(RCC_I2C1);
+
+
+    /* configure pins PB6 (SCL) and PB7 (SDA) as Alternate Function */
+    gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO6|GPIO7);
+    gpio_set_af(GPIOB, GPIO_AF4, GPIO6|GPIO7);
+    gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ, GPIO6 | GPIO7);
+    
+    /* reset and config I2C */
+
+
+    i2c_peripheral_disable(SSD1306_I2C_PORT);
+
+    i2c_set_clock_frequency(SSD1306_I2C_PORT, I2C_CR2_FREQ_42MHZ);
+    i2c_set_fast_mode(SSD1306_I2C_PORT); /* fast mode */
+    i2c_set_ccr(SSD1306_I2C_PORT, 35); /* configure CCR */
+    i2c_set_trise(SSD1306_I2C_PORT, 42);
+
+    i2c_peripheral_enable(SSD1306_I2C_PORT);
 }
 
 static void timer_init(void) {
@@ -127,7 +287,7 @@ static void timer_init(void) {
     timer_enable_counter(TIM2);
 }
 
-void uart_init(void) {
+void usart_init(void) {
 
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_USART2);
@@ -176,11 +336,14 @@ int main(void) {
     cm_enable_interrupts();
     
     adc_init();
-    uart_init();
+    usart_init();
     timer_init();
-
+    i2c_setup();
+    
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
-
+    ssd1306_Init();
+    ssd1306_WriteString("Inicio", Font_11x18,White);
+    ssd1306_UpdateScreen();
     usart_send_string("inicio do codigo\r\n");
     char msg[50];
     
