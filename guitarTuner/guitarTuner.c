@@ -120,14 +120,17 @@ const double getNoteDiff(double frequency, int closestIndex) {
     double noteGap;
     double frequencyGap;
 
-    if(frequency<noteFrequencies[closestIndex]){
-	noteGap = noteFrequencies[closestIndex]-noteFrequencies[closestIndex-1];
-    }else{
-	noteGap = noteFrequencies[closestIndex]-noteFrequencies[closestIndex+1];
+    if (frequency < noteFrequencies[closestIndex]) {
+        noteGap = noteFrequencies[closestIndex] - noteFrequencies[closestIndex - 1];
+    } else {
+        noteGap = noteFrequencies[closestIndex + 1] - noteFrequencies[closestIndex];
     }
   
-    frequencyGap = abs(frequency-noteFrequencies[closestIndex])/noteGap*-100;
-    return (int)frequencyGap;
+    frequencyGap = fabs(frequency - noteFrequencies[closestIndex]) / noteGap * 100;
+    if (frequency < noteFrequencies[closestIndex]) {
+        frequencyGap = -frequencyGap;
+    }
+    return frequencyGap;
 }
 
 void displayResult(int noteDiff, double frequency, int noteIndex){
@@ -149,9 +152,8 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
     /* ssd1306.setTextSize(4); */
     /* ssd1306.print("  "); */
     ssd1306_WriteString(noteNames[noteIndex % 12], Font_11x18, White);
-    /* ssd1306.ssd1306(); */
     ssd1306_UpdateScreen();
-
+     
 }	     
 
 	
@@ -262,7 +264,7 @@ void i2c_setup(void) {
     /* configure pins PB6 (SCL) and PB7 (SDA) as Alternate Function */
     gpio_mode_setup(GPIOB, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO6|GPIO7);
     gpio_set_af(GPIOB, GPIO_AF4, GPIO6|GPIO7);
-    gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ, GPIO6 | GPIO7);
+    gpio_set_output_options(GPIOB, GPIO_OTYPE_OD, GPIO_OSPEED_2MHZ, GPIO6 | GPIO7);
     
     /* reset and config I2C */
 
