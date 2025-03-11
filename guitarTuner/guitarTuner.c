@@ -33,8 +33,7 @@ float magnitude_fft[FRAME_LEN / 2];
 float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)
 float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
-arm_fir_instance_f32 fir_filter;
-float32_t fir_state[NUM_TAPS + FRAME_LEN - 1];  // Estado do filtro
+
 
 const char *noteNames[] = {"A","A#","B","C","C#","D","D#","E","F","F#","G","G#"};
 const double noteFrequencies[60] = {
@@ -100,75 +99,7 @@ const double noteFrequencies[60] = {
   1661.22, // G#6
   1760.00, // A6
 };
-
-const float32_t fir_bandpass_coeffs[NUM_TAPS] = {
-    -0.000643f,  // Coeficiente 1
-    -0.000652f,  // Coeficiente 2
-    0.000530f,  // Coeficiente 3
-    0.000371f,  // Coeficiente 4
-    -0.001573f,  // Coeficiente 5
-    -0.001865f,  // Coeficiente 6
-    0.000367f,  // Coeficiente 7
-    -0.000005f,  // Coeficiente 8
-    -0.004395f,  // Coeficiente 9
-    -0.005184f,  // Coeficiente 10
-    -0.000405f,  // Coeficiente 11
-    -0.001197f,  // Coeficiente 12
-    -0.010219f,  // Coeficiente 13
-    -0.011658f,  // Coeficiente 14
-    -0.002022f,  // Coeficiente 15
-    -0.003185f,  // Coeficiente 16
-    -0.019690f,  // Coeficiente 17
-    -0.021831f,  // Coeficiente 18
-    -0.003578f,  // Coeficiente 19
-    -0.004633f,  // Coeficiente 20
-    -0.033087f,  // Coeficiente 21
-    -0.036085f,  // Coeficiente 22
-    -0.002176f,  // Coeficiente 23
-    -0.001808f,  // Coeficiente 24
-    -0.052093f,  // Coeficiente 25
-    -0.057401f,  // Coeficiente 26
-    0.010839f,  // Coeficiente 27
-    0.017974f,  // Coeficiente 28
-    -0.093216f,  // Coeficiente 29
-    -0.118807f,  // Coeficiente 30
-    0.118702f,  // Coeficiente 31
-    0.417648f,  // Coeficiente 32
-    0.417648f,  // Coeficiente 33
-    0.118702f,  // Coeficiente 34
-    -0.118807f,  // Coeficiente 35
-    -0.093216f,  // Coeficiente 36
-    0.017974f,  // Coeficiente 37
-    0.010839f,  // Coeficiente 38
-    -0.057401f,  // Coeficiente 39
-    -0.052093f,  // Coeficiente 40
-    -0.001808f,  // Coeficiente 41
-    -0.002176f,  // Coeficiente 42
-    -0.036085f,  // Coeficiente 43
-    -0.033087f,  // Coeficiente 44
-    -0.004633f,  // Coeficiente 45
-    -0.003578f,  // Coeficiente 46
-    -0.021831f,  // Coeficiente 47
-    -0.019690f,  // Coeficiente 48
-    -0.003185f,  // Coeficiente 49
-    -0.002022f,  // Coeficiente 50
-    -0.011658f,  // Coeficiente 51
-    -0.010219f,  // Coeficiente 52
-    -0.001197f,  // Coeficiente 53
-    -0.000405f,  // Coeficiente 54
-    -0.005184f,  // Coeficiente 55
-    -0.004395f,  // Coeficiente 56
-    -0.000005f,  // Coeficiente 57
-    0.000367f,  // Coeficiente 58
-    -0.001865f,  // Coeficiente 59
-    -0.001573f,  // Coeficiente 60
-    0.000371f,  // Coeficiente 61
-    0.000530f,  // Coeficiente 62
-    -0.000652f,  // Coeficiente 63
-    -0.000643f   // Coeficiente 64
-};
-
-
+ 
 const int getClosestNoteIndex(double frequency) {
     double minDiff = 1e9;
     int closestIndex = 0;
@@ -202,10 +133,10 @@ const double getNoteDiff(double frequency, int closestIndex) {
 }
 
 void displayResult(int noteDiff, double frequency, int noteIndex){
-    char frequencyStr[10];
+    char frequencyStr[15];
     
     ssd1306_SetCursor(0, 10);
-    snprintf(frequencyStr,sizeof(frequencyStr),"%.2f \n",frequency);
+    snprintf(frequencyStr,sizeof(frequencyStr),"%.2f hz \n",frequency);
 	  
 	     
     ssd1306_Fill(Black);
@@ -214,19 +145,23 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
     ssd1306_Line(64,2,(64+(128*noteDiff/100)),2, White);
     ssd1306_Line(64,3,(64+(128*noteDiff/100)),3, White);
     ssd1306_Line(64,4,(64+(128*noteDiff/100)),4, White);
+    ssd1306_Line(64,5,(64+(128*noteDiff/100)),5, White);
+    ssd1306_Line(64,6,(64+(128*noteDiff/100)),6, White);
+    ssd1306_Line(64,7,(64+(128*noteDiff/100)),7, White);
+    ssd1306_Line(64,8,(64+(128*noteDiff/100)),8, White);
+    ssd1306_Line(64,9,(64+(128*noteDiff/100)),9, White);
+    ssd1306_SetCursor(30,20);
     ssd1306_WriteString("  ",Font_11x18, White);
-    ssd1306_WriteString(frequencyStr,Font_11x18, White);
+
     /* ssd1306.println("hz"); */
     /* ssd1306.setTextSize(4); */
     /* ssd1306.print("  "); */
-    ssd1306_WriteString(noteNames[noteIndex % 12], Font_11x18, White);
+    ssd1306_WriteString(noteNames[noteIndex % 12], Font_16x26, White);
+    ssd1306_SetCursor(25,50);
+    ssd1306_WriteString(frequencyStr,Font_7x10, White);
     ssd1306_UpdateScreen();
      
 }	     
-
-void apply_fir_bandpass_filter(float32_t *input, float32_t *output, uint32_t block_size) {
-    arm_fir_f32(&fir_filter, input, output, block_size);
-}
 	
 void adc_isr(void) {
     if (adc_eoc(ADC1)) {
@@ -417,7 +352,7 @@ int main(void) {
     i2c_setup();
     
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
-    arm_fir_init_f32(&fir_filter, NUM_TAPS, (float32_t *)fir_bandpass_coeffs, fir_state, FRAME_LEN);
+
 
     ssd1306_Init();
     ssd1306_WriteString("Inicio", Font_11x18,White);
