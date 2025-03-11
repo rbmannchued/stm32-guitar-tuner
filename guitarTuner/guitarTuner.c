@@ -20,7 +20,7 @@
 
 #define FRAME_LEN 4096
 #define SAMPLE_RATE 4000  // Defina a taxa de amostragem do seu ADC
-//#define NUM_TAPS 64
+#define NUM_TAPS 64
 
 volatile uint32_t sample_count = 0;
 volatile uint32_t last_time = 0;
@@ -33,6 +33,8 @@ float magnitude_fft[FRAME_LEN / 2];
 float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)
 float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
+arm_fir_instance_f32 fir_filter;
+float32_t fir_state[NUM_TAPS + FRAME_LEN - 1];  // Estado do filtro
 
 const char *noteNames[] = {"A","A#","B","C","C#","D","D#","E","F","F#","G","G#"};
 const double noteFrequencies[60] = {
@@ -99,6 +101,72 @@ const double noteFrequencies[60] = {
   1760.00, // A6
 };
 
+const float32_t fir_bandpass_coeffs[NUM_TAPS] = {
+    -0.000643f,  // Coeficiente 1
+    -0.000652f,  // Coeficiente 2
+    0.000530f,  // Coeficiente 3
+    0.000371f,  // Coeficiente 4
+    -0.001573f,  // Coeficiente 5
+    -0.001865f,  // Coeficiente 6
+    0.000367f,  // Coeficiente 7
+    -0.000005f,  // Coeficiente 8
+    -0.004395f,  // Coeficiente 9
+    -0.005184f,  // Coeficiente 10
+    -0.000405f,  // Coeficiente 11
+    -0.001197f,  // Coeficiente 12
+    -0.010219f,  // Coeficiente 13
+    -0.011658f,  // Coeficiente 14
+    -0.002022f,  // Coeficiente 15
+    -0.003185f,  // Coeficiente 16
+    -0.019690f,  // Coeficiente 17
+    -0.021831f,  // Coeficiente 18
+    -0.003578f,  // Coeficiente 19
+    -0.004633f,  // Coeficiente 20
+    -0.033087f,  // Coeficiente 21
+    -0.036085f,  // Coeficiente 22
+    -0.002176f,  // Coeficiente 23
+    -0.001808f,  // Coeficiente 24
+    -0.052093f,  // Coeficiente 25
+    -0.057401f,  // Coeficiente 26
+    0.010839f,  // Coeficiente 27
+    0.017974f,  // Coeficiente 28
+    -0.093216f,  // Coeficiente 29
+    -0.118807f,  // Coeficiente 30
+    0.118702f,  // Coeficiente 31
+    0.417648f,  // Coeficiente 32
+    0.417648f,  // Coeficiente 33
+    0.118702f,  // Coeficiente 34
+    -0.118807f,  // Coeficiente 35
+    -0.093216f,  // Coeficiente 36
+    0.017974f,  // Coeficiente 37
+    0.010839f,  // Coeficiente 38
+    -0.057401f,  // Coeficiente 39
+    -0.052093f,  // Coeficiente 40
+    -0.001808f,  // Coeficiente 41
+    -0.002176f,  // Coeficiente 42
+    -0.036085f,  // Coeficiente 43
+    -0.033087f,  // Coeficiente 44
+    -0.004633f,  // Coeficiente 45
+    -0.003578f,  // Coeficiente 46
+    -0.021831f,  // Coeficiente 47
+    -0.019690f,  // Coeficiente 48
+    -0.003185f,  // Coeficiente 49
+    -0.002022f,  // Coeficiente 50
+    -0.011658f,  // Coeficiente 51
+    -0.010219f,  // Coeficiente 52
+    -0.001197f,  // Coeficiente 53
+    -0.000405f,  // Coeficiente 54
+    -0.005184f,  // Coeficiente 55
+    -0.004395f,  // Coeficiente 56
+    -0.000005f,  // Coeficiente 57
+    0.000367f,  // Coeficiente 58
+    -0.001865f,  // Coeficiente 59
+    -0.001573f,  // Coeficiente 60
+    0.000371f,  // Coeficiente 61
+    0.000530f,  // Coeficiente 62
+    -0.000652f,  // Coeficiente 63
+    -0.000643f   // Coeficiente 64
+};
 
 
 const int getClosestNoteIndex(double frequency) {
@@ -156,6 +224,9 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
      
 }	     
 
+void apply_fir_bandpass_filter(float32_t *input, float32_t *output, uint32_t block_size) {
+    arm_fir_f32(&fir_filter, input, output, block_size);
+}
 	
 void adc_isr(void) {
     if (adc_eoc(ADC1)) {
@@ -170,6 +241,21 @@ void adc_isr(void) {
     }
 }
 
+void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
+    // Inicializa o resultado do HPS com a magnitude da FFT
+    for (int i = 0; i < hps_len; i++) {
+        hps_result[i] = magnitude_fft[i];
+    }
+
+    // Decimar e multiplicar
+    for (int decimation = 2; decimation <= 2; decimation++) {
+        for (int i = 0; i < hps_len / decimation; i++) {
+            hps_result[i] *= magnitude_fft[i * decimation];
+        }
+    }
+}
+
+// Função principal para processar a FFT
 void process_fft(void) {
     // Calcular a média do sinal (offset DC)
     char msg[65];
@@ -178,7 +264,7 @@ void process_fft(void) {
     int lastNoteIndex = 0;
     int lastNoteDiff = 0;
     double lastFrequency = 0;
-    
+
     for (int i = 0; i < FRAME_LEN; i++) {
         mean += (float)adc_buffer[i] / 4096.0f;
     }
@@ -205,17 +291,7 @@ void process_fft(void) {
     // Aplicar Harmonic Product Spectrum (HPS)
     int hps_len = FRAME_LEN / 2;
     float hps_result[hps_len];
-
-    for (int i = 0; i < hps_len; i++) {
-        hps_result[i] = magnitude_fft[i];
-    }
-
-    // Decimar e multiplicar
-     for (int decimation = 2; decimation <= 2; decimation++) {
-        for (int i = 0; i < hps_len / decimation; i++) {
-            hps_result[i] *= magnitude_fft[i * decimation];
-        }
-    }
+    apply_hps(magnitude_fft, hps_result, hps_len);
 
     // Encontrar o pico máximo
     float max_value = 0.0f;
@@ -237,23 +313,21 @@ void process_fft(void) {
     // Converter índice para frequência em Hz
     float frequency = (float)max_index * SAMPLE_RATE / (FRAME_LEN / 2);
     int noteIndex = getClosestNoteIndex(frequency);
-    // int noteDiff = getNoteDiff(frequency, noteIndex);
 
-        
-    if(frequency==0 || noteIndex==60 || noteIndex==0 ){
-	displayResult(lastNoteDiff, lastFrequency, lastNoteIndex);
-    }else{
-	int noteDiff = getNoteDiff(frequency, noteIndex);
-	displayResult(noteDiff, frequency, noteIndex);
-	lastNoteDiff = noteDiff;
-	lastFrequency = frequency;
-	lastNoteIndex = noteIndex;
+    if (frequency == 0 || noteIndex == 60 || noteIndex == 0) {
+        displayResult(lastNoteDiff, lastFrequency, lastNoteIndex);
+    } else {
+        int noteDiff = getNoteDiff(frequency, noteIndex);
+        displayResult(noteDiff, frequency, noteIndex);
+        lastNoteDiff = noteDiff;
+        lastFrequency = frequency;
+        lastNoteIndex = noteIndex;
     }
+
     // Enviar para UART
     snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz, nota mais prox: %d \r\n", max_index, frequency, noteIndex);
     usart_send_string(msg);
 }
-
 
 void i2c_setup(void) {
     /* enable clock for GPIOB and I2C1 */
@@ -343,6 +417,8 @@ int main(void) {
     i2c_setup();
     
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
+    arm_fir_init_f32(&fir_filter, NUM_TAPS, (float32_t *)fir_bandpass_coeffs, fir_state, FRAME_LEN);
+
     ssd1306_Init();
     ssd1306_WriteString("Inicio", Font_11x18,White);
     ssd1306_UpdateScreen();
