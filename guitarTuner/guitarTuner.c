@@ -285,7 +285,7 @@ void process_fft(void) {
 
     // Aplicar janela (Hamming)
     for (int i = 0; i < FRAME_LEN; i++) {
-        float window = 0.54f - 0.46f * cosf(2 * PI * i / (FRAME_LEN - 1)); // Hamming window
+	float window = 0.5f * (1 - cosf(2 * PI * i / (FRAME_LEN - 1))); // Hanning window
         filtered_signal[i] *= window;
     }
 
@@ -318,7 +318,7 @@ void process_fft(void) {
     }
 
     // Converter índice para frequência em Hz
-    float frequency = (float)max_index * SAMPLE_RATE / (FRAME_LEN / 2);
+    float frequency = (float)max_index * SAMPLE_RATE / FRAME_LEN;
     int noteIndex = getClosestNoteIndex(frequency);
 
     if (frequency == 0 || noteIndex == 60 || noteIndex == 0) {
