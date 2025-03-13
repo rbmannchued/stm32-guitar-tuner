@@ -8,7 +8,7 @@
 
 
 #include "arm_math.h"
-//#include "notes.h"
+
 #include "ssd1306.h"
 #include "ssd1306_fonts.h"
 
@@ -33,7 +33,76 @@ float magnitude_fft[FRAME_LEN / 2];
 float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)
 float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
+arm_fir_instance_f32 fir_instance;
+float32_t fir_state[FRAME_LEN + NUM_TAPS - 1];
 
+
+const float32_t fir_coeffs[64] = {
+    -0.00079823,
+    -0.00041938,
+    0.00030160,
+    0.00076554,
+    0.00032056,
+    -0.00119156,
+    -0.00299337,
+    -0.00367625,
+    -0.00240416,
+    -0.00013388,
+    0.00054591,
+    -0.00255714,
+    -0.00874998,
+    -0.01400784,
+    -0.01384406,
+    -0.00772045,
+    -0.00099430,
+    -0.00158625,
+    -0.01298392,
+    -0.02934585,
+    -0.03814044,
+    -0.03005271,
+    -0.00889455,
+    0.00776666,
+    0.00053342,
+    -0.03447555,
+    -0.07647799,
+    -0.08885410,
+    -0.04294674,
+    0.05869062,
+    0.17717949,
+    0.25658406,
+    0.25658406,
+    0.17717949,
+    0.05869062,
+    -0.04294674,
+    -0.08885410,
+    -0.07647799,
+    -0.03447555,
+    0.00053342,
+    0.00776666,
+    -0.00889455,
+    -0.03005271,
+    -0.03814044,
+    -0.02934585,
+    -0.01298392,
+    -0.00158625,
+    -0.00099430,
+    -0.00772045,
+    -0.01384406,
+    -0.01400784,
+    -0.00874998,
+    -0.00255714,
+    0.00054591,
+    -0.00013388,
+    -0.00240416,
+    -0.00367625,
+    -0.00299337,
+    -0.00119156,
+    0.00032056,
+    0.00076554,
+    0.00030160,
+    -0.00041938,
+    -0.00079823
+};
 
 const char *noteNames[] = {"A","A#","B","C","C#","D","D#","E","F","F#","G","G#"};
 const double noteFrequencies[60] = {
@@ -153,9 +222,6 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
     ssd1306_SetCursor(30,20);
     ssd1306_WriteString("  ",Font_11x18, White);
 
-    /* ssd1306.println("hz"); */
-    /* ssd1306.setTextSize(4); */
-    /* ssd1306.print("  "); */
     ssd1306_WriteString(noteNames[noteIndex % 12], Font_16x26, White);
     ssd1306_SetCursor(25,50);
     ssd1306_WriteString(frequencyStr,Font_7x10, White);
@@ -176,6 +242,10 @@ void adc_isr(void) {
     }
 }
 
+void apply_fir_filter(float32_t *input, float32_t *output, uint32_t block_size) {
+    arm_fir_f32(&fir_instance, input, output, block_size);
+}
+
 void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
     // Inicializa o resultado do HPS com a magnitude da FFT
     for (int i = 0; i < hps_len; i++) {
@@ -183,7 +253,7 @@ void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
     }
 
     // Decimar e multiplicar
-    for (int decimation = 2; decimation <= 2; decimation++) {
+    for (int decimation = 2; decimation <= 2; decimation++) { 
         for (int i = 0; i < hps_len / decimation; i++) {
             hps_result[i] *= magnitude_fft[i * decimation];
         }
@@ -206,19 +276,21 @@ void process_fft(void) {
     mean /= FRAME_LEN;
 
     // Remover o offset DC e normalizar o sinal
+    float32_t input_signal[FRAME_LEN];
     for (int i = 0; i < FRAME_LEN; i++) {
-        input_fft[i * 2] = ((float)adc_buffer[i] / 4096.0f) - mean;  // Remove DC
-        input_fft[i * 2 + 1] = 0.0f; // Parte imaginária = 0
+        input_signal[i] = ((float)adc_buffer[i] / 4096.0f) - mean;  // Remove DC
     }
+    float32_t filtered_signal[FRAME_LEN];
+    apply_fir_filter(input_signal, filtered_signal, FRAME_LEN);
 
     // Aplicar janela (Hamming)
     for (int i = 0; i < FRAME_LEN; i++) {
         float window = 0.54f - 0.46f * cosf(2 * PI * i / (FRAME_LEN - 1)); // Hamming window
-        input_fft[i * 2] *= window;
+        filtered_signal[i] *= window;
     }
 
     // Executar FFT
-    arm_rfft_fast_f32(&fft_instance, input_fft, output_fft, 0);
+    arm_rfft_fast_f32(&fft_instance, filtered_signal, output_fft, 0);
 
     // Calcula magnitude da FFT (ignorando índice 0 e primeiros índices)
     arm_cmplx_mag_f32(output_fft, magnitude_fft, FRAME_LEN / 2);
@@ -352,6 +424,7 @@ int main(void) {
     i2c_setup();
     
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
+    arm_fir_init_f32(&fir_instance, NUM_TAPS, (float32_t *)fir_coeffs, fir_state, FRAME_LEN);
 
 
     ssd1306_Init();
