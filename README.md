@@ -4,6 +4,12 @@ libopencm3 and CMSIS DSP based guitar tuner
 
 
 
-# How it works
+## How it works
+First, the weak signal from the magnetic guitar pickups needs to be amplified so that the microcontroller can understand it.\
+Using lm358 opamp is a good idea, you can follow the diagram:
 
-First the weak guitar signal from the magnetic pickups need to be amplified
+![Opamp wiring diagram](/img/opAmpDiagram.png)
+
+
+
+
