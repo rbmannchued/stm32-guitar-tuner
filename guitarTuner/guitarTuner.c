@@ -38,74 +38,74 @@ float32_t fir_state[FRAME_LEN + NUM_TAPS - 1];
 
 
 const float32_t fir_coeffs[64] = {
-    -0.00079823,
-    -0.00041938,
-    0.00030160,
-    0.00076554,
-    0.00032056,
-    -0.00119156,
-    -0.00299337,
-    -0.00367625,
-    -0.00240416,
-    -0.00013388,
-    0.00054591,
-    -0.00255714,
-    -0.00874998,
-    -0.01400784,
-    -0.01384406,
-    -0.00772045,
-    -0.00099430,
-    -0.00158625,
-    -0.01298392,
-    -0.02934585,
-    -0.03814044,
-    -0.03005271,
-    -0.00889455,
-    0.00776666,
-    0.00053342,
-    -0.03447555,
-    -0.07647799,
-    -0.08885410,
-    -0.04294674,
-    0.05869062,
-    0.17717949,
-    0.25658406,
-    0.25658406,
-    0.17717949,
-    0.05869062,
-    -0.04294674,
-    -0.08885410,
-    -0.07647799,
-    -0.03447555,
-    0.00053342,
-    0.00776666,
-    -0.00889455,
-    -0.03005271,
-    -0.03814044,
-    -0.02934585,
-    -0.01298392,
-    -0.00158625,
-    -0.00099430,
-    -0.00772045,
-    -0.01384406,
-    -0.01400784,
-    -0.00874998,
-    -0.00255714,
-    0.00054591,
-    -0.00013388,
-    -0.00240416,
-    -0.00367625,
-    -0.00299337,
-    -0.00119156,
-    0.00032056,
-    0.00076554,
-    0.00030160,
-    -0.00041938,
-    -0.00079823
+    -0.00019963,
+    0.00046691,
+    0.00035070,
+    -0.00076233,
+    -0.00207077,
+    -0.00222905,
+    -0.00083510,
+    0.00048556,
+    -0.00073123,
+    -0.00475865,
+    -0.00825601,
+    -0.00727923,
+    -0.00245701,
+    -0.00001404,
+    -0.00556880,
+    -0.01639876,
+    -0.02201229,
+    -0.01516454,
+    -0.00235712,
+    0.00000327,
+    -0.01658760,
+    -0.03930061,
+    -0.04323853,
+    -0.01878963,
+    0.01117643,
+    0.00836715,
+    -0.03936117,
+    -0.09263793,
+    -0.08430548,
+    0.02052339,
+    0.18146407,
+    0.30212950,
+    0.30212950,
+    0.18146407,
+    0.02052339,
+    -0.08430548,
+    -0.09263793,
+    -0.03936117,
+    0.00836715,
+    0.01117643,
+    -0.01878963,
+    -0.04323853,
+    -0.03930061,
+    -0.01658760,
+    0.00000327,
+    -0.00235712,
+    -0.01516454,
+    -0.02201229,
+    -0.01639876,
+    -0.00556880,
+    -0.00001404,
+    -0.00245701,
+    -0.00727923,
+    -0.00825601,
+    -0.00475865,
+    -0.00073123,
+    0.00048556,
+    -0.00083510,
+    -0.00222905,
+    -0.00207077,
+    -0.00076233,
+    0.00035070,
+    0.00046691,
+    -0.00019963
 };
 
 const char *noteNames[] = {"A","A#","B","C","C#","D","D#","E","F","F#","G","G#"};
-const double noteFrequencies[60] = {
+const float noteFrequencies[60] = {
   55.00,  // A1
   58.27,  // A#1
   61.74,  // B1
@@ -168,13 +168,18 @@ const double noteFrequencies[60] = {
   1661.22, // G#6
   1760.00, // A6
 };
- 
-const int getClosestNoteIndex(double frequency) {
-    double minDiff = 1e9;
-    int closestIndex = 0;
+
+int getNoteOctave(int noteIndex) {
+    return (noteIndex / 12) + 1;
+}
+
   
+const int getClosestNoteIndex(double frequency) {
+    float minDiff = 1e9;
+    int closestIndex = 0;
+
     for (int i = 1; i < sizeof(noteFrequencies) / sizeof(noteFrequencies[0]); i++) {
-	double diff = fabs(frequency - noteFrequencies[i]);
+	float diff = fabs(frequency - noteFrequencies[i]);
 	if (diff < minDiff) {
 	    minDiff = diff;
 	    closestIndex = i;
@@ -203,9 +208,11 @@ const double getNoteDiff(double frequency, int closestIndex) {
 
 void displayResult(int noteDiff, double frequency, int noteIndex){
     char frequencyStr[15];
-    
+    char octaveStr[10];
+    int octave = getNoteOctave(noteIndex);
     ssd1306_SetCursor(0, 10);
     snprintf(frequencyStr,sizeof(frequencyStr),"%.2f hz \n",frequency);
+    snprintf(octaveStr, sizeof(octaveStr), "%d", octave);
 	  
 	     
     ssd1306_Fill(Black);
@@ -222,8 +229,11 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
     ssd1306_SetCursor(30,20);
     ssd1306_WriteString("  ",Font_11x18, White);
 
+
     ssd1306_WriteString(noteNames[noteIndex % 12], Font_16x26, White);
-    ssd1306_SetCursor(25,50);
+    ssd1306_SetCursor(85,26);
+    ssd1306_WriteString(octaveStr, Font_11x18,White);
+    ssd1306_SetCursor(40,50);
     ssd1306_WriteString(frequencyStr,Font_7x10, White);
     ssd1306_UpdateScreen();
      
@@ -282,11 +292,11 @@ void process_fft(void) {
     }
     float32_t filtered_signal[FRAME_LEN];
     apply_fir_filter(input_signal, filtered_signal, FRAME_LEN);
-
+ 
     // Aplicar janela (Hamming)
     for (int i = 0; i < FRAME_LEN; i++) {
 	float window = 0.5f * (1 - cosf(2 * PI * i / (FRAME_LEN - 1))); // Hanning window
-        filtered_signal[i] *= window;
+      filtered_signal[i] *= window;
     }
 
     // Executar FFT
@@ -295,7 +305,7 @@ void process_fft(void) {
     // Calcula magnitude da FFT (ignorando índice 0 e primeiros índices)
     arm_cmplx_mag_f32(output_fft, magnitude_fft, FRAME_LEN / 2);
 
-    // Aplicar Harmonic Product Spectrum (HPS)
+    //Aplicar Harmonic Product Spectrum (HPS)
     int hps_len = FRAME_LEN / 2;
     float hps_result[hps_len];
     apply_hps(magnitude_fft, hps_result, hps_len);
@@ -332,8 +342,8 @@ void process_fft(void) {
     }
 
     // Enviar para UART
-    snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz, nota mais prox: %d \r\n", max_index, frequency, noteIndex);
-    usart_send_string(msg);
+    /* snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz, nota mais prox: %d \r\n", max_index, frequency, noteIndex); */
+    /* usart_send_string(msg); */
 }
 
 void i2c_setup(void) {
