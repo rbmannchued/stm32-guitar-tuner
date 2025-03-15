@@ -36,6 +36,32 @@ arm_rfft_fast_instance_f32 fft_instance;
 arm_fir_instance_f32 fir_instance;
 float32_t fir_state[FRAME_LEN + NUM_TAPS - 1];
 
+typedef struct {
+    uint16_t buffer[FRAME_LEN]; // Buffer para armazenar amostras
+    uint16_t head;  // Índice de escrita
+    uint16_t tail;  // Índice de leitura
+    uint16_t count; // Quantidade de elementos na fila
+} CircularBuffer;
+
+CircularBuffer adcBuffer = { .head = 0, .tail = 0, .count = 0 };
+
+void CircularBuffer_Push(CircularBuffer *cb, uint16_t value) {
+    if (cb->count < FRAME_LEN) {  // Verifica se a fila não está cheia
+        cb->buffer[cb->head] = value;
+        cb->head = (cb->head + 1) % FRAME_LEN;
+        cb->count++;
+    }
+}
+
+uint16_t CircularBuffer_Pop(CircularBuffer *cb) {
+    uint16_t value = 0;
+    if (cb->count > 0) { // Verifica se a fila não está vazia
+        value = cb->buffer[cb->tail];
+        cb->tail = (cb->tail + 1) % FRAME_LEN;
+        cb->count--;
+    }
+    return value;
+}
 
 const float32_t fir_coeffs[64] = {
     -0.00019963,
@@ -241,19 +267,15 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
 	
 void adc_isr(void) {
     if (adc_eoc(ADC1)) {
-
-        adc_buffer[buffer_index++] = adc_read_regular(ADC1);
-	sample_count++;
-        if (buffer_index >= FRAME_LEN) {
-	    
-            buffer_index = 0;
-            frame_ready = 1;
-        }
+        uint16_t adc_value = adc_read_regular(ADC1); // Lê o valor do ADC
+        CircularBuffer_Push(&adcBuffer, adc_value);  // Insere na fila circular
     }
-}
-
-void apply_fir_filter(float32_t *input, float32_t *output, uint32_t block_size) {
-    arm_fir_f32(&fir_instance, input, output, block_size);
+    if (adcBuffer.count >= FRAME_LEN) {
+	for (int i = 0; i < FRAME_LEN; i++) {
+	    adc_buffer[i] = CircularBuffer_Pop(&adcBuffer); // Coleta os dados da fila
+	}
+	frame_ready = 1; // Indica que os dados estão prontos para processamento
+    }
 }
 
 void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
@@ -273,7 +295,7 @@ void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
 // Função principal para processar a FFT
 void process_fft(void) {
     // Calcular a média do sinal (offset DC)
-    char msg[65];
+    // char msg[65];
     float mean = 0.0f;
 
     int lastNoteIndex = 0;
@@ -291,8 +313,8 @@ void process_fft(void) {
         input_signal[i] = ((float)adc_buffer[i] / 4096.0f) - mean;  // Remove DC
     }
     float32_t filtered_signal[FRAME_LEN];
-    apply_fir_filter(input_signal, filtered_signal, FRAME_LEN);
- 
+    arm_fir_f32(&fir_instance, input_signal, filtered_signal,FRAME_LEN);
+
     // Aplicar janela (Hamming)
     for (int i = 0; i < FRAME_LEN; i++) {
 	float window = 0.5f * (1 - cosf(2 * PI * i / (FRAME_LEN - 1))); // Hanning window
@@ -452,3 +474,4 @@ int main(void) {
         __asm__("wfi");
     }
 }
+ 
