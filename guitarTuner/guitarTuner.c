@@ -17,15 +17,17 @@
 #include <math.h>
 
 
-
+// resolution of 0.97hz
 #define FRAME_LEN 4096
-#define SAMPLE_RATE 4000  // Defina a taxa de amostragem do seu ADC
+#define SAMPLE_RATE 4000
 #define NUM_TAPS 64
 
 volatile uint32_t sample_count = 0;
 volatile uint32_t last_time = 0;
 volatile uint32_t ms_counter = 0;
 
+static volatile float32_t filtered_signal[FRAME_LEN];
+static volatile float32_t input_signal[FRAME_LEN];
 static volatile uint16_t adc_buffer[FRAME_LEN];
 static volatile int buffer_index = 0;
 static volatile int frame_ready = 0;
@@ -45,7 +47,7 @@ typedef struct {
 
 CircularBuffer adcBuffer = { .head = 0, .tail = 0, .count = 0 };
 
-void CircularBuffer_Push(CircularBuffer *cb, uint16_t value) {
+void circularBuffer_Push(CircularBuffer *cb, uint16_t value) {
     if (cb->count < FRAME_LEN) {  // Verifica se a fila não está cheia
         cb->buffer[cb->head] = value;
         cb->head = (cb->head + 1) % FRAME_LEN;
@@ -53,7 +55,7 @@ void CircularBuffer_Push(CircularBuffer *cb, uint16_t value) {
     }
 }
 
-uint16_t CircularBuffer_Pop(CircularBuffer *cb) {
+uint16_t circularBuffer_Pop(CircularBuffer *cb) {
     uint16_t value = 0;
     if (cb->count > 0) { // Verifica se a fila não está vazia
         value = cb->buffer[cb->tail];
@@ -131,7 +133,7 @@ const float32_t fir_coeffs[64] = {
 };
 
 const char *noteNames[] = {"A","A#","B","C","C#","D","D#","E","F","F#","G","G#"};
-const float noteFrequencies[60] = {
+const float noteFrequencies[45] = {
   55.00,  // A1
   58.27,  // A#1
   61.74,  // B1
@@ -177,22 +179,6 @@ const float noteFrequencies[60] = {
   622.25, // D#5
   659.26, // E5
   698.46, // F5
-  739.99, // F#5
-  783.99, // G5
-  830.61, // G#5
-  880.00, // A5
-  932.33, // A#5
-  987.77, // B5
-  1046.50, // C6
-  1108.73, // C#6
-  1174.66, // D6
-  1244.51, // D#6
-  1318.51, // E6
-  1396.91, // F6
-  1479.98, // F#6
-  1567.98, // G6
-  1661.22, // G#6
-  1760.00, // A6
 };
 
 int getNoteOctave(int noteIndex) {
@@ -268,11 +254,11 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
 void adc_isr(void) {
     if (adc_eoc(ADC1)) {
         uint16_t adc_value = adc_read_regular(ADC1); // Lê o valor do ADC
-        CircularBuffer_Push(&adcBuffer, adc_value);  // Insere na fila circular
+        circularBuffer_Push(&adcBuffer, adc_value);  // Insere na fila circular
     }
     if (adcBuffer.count >= FRAME_LEN) {
 	for (int i = 0; i < FRAME_LEN; i++) {
-	    adc_buffer[i] = CircularBuffer_Pop(&adcBuffer); // Coleta os dados da fila
+	    adc_buffer[i] = circularBuffer_Pop(&adcBuffer); // Coleta os dados da fila
 	}
 	frame_ready = 1; // Indica que os dados estão prontos para processamento
     }
@@ -291,65 +277,52 @@ void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
         }
     }
 }
-
-// Função principal para processar a FFT
 void process_fft(void) {
-    // Calcular a média do sinal (offset DC)
-    // char msg[65];
+    char msg[65];
     float mean = 0.0f;
 
     int lastNoteIndex = 0;
     int lastNoteDiff = 0;
     double lastFrequency = 0;
 
+    // Cálculo da média e normalização do sinal com janela Hanning
     for (int i = 0; i < FRAME_LEN; i++) {
         mean += (float)adc_buffer[i] / 4096.0f;
     }
     mean /= FRAME_LEN;
 
-    // Remover o offset DC e normalizar o sinal
-    float32_t input_signal[FRAME_LEN];
     for (int i = 0; i < FRAME_LEN; i++) {
-        input_signal[i] = ((float)adc_buffer[i] / 4096.0f) - mean;  // Remove DC
-    }
-    float32_t filtered_signal[FRAME_LEN];
-    arm_fir_f32(&fir_instance, input_signal, filtered_signal,FRAME_LEN);
-
-    // Aplicar janela (Hamming)
-    for (int i = 0; i < FRAME_LEN; i++) {
-	float window = 0.5f * (1 - cosf(2 * PI * i / (FRAME_LEN - 1))); // Hanning window
-      filtered_signal[i] *= window;
+        float window = 0.5f * (1 - cosf(2 * PI * i / (FRAME_LEN - 1)));  
+        input_signal[i] = (((float)adc_buffer[i] / 4096.0f) - mean) * window;  
     }
 
+    //aplica o filtro fir
+    arm_fir_f32(&fir_instance, input_signal, filtered_signal, FRAME_LEN);
     // Executar FFT
     arm_rfft_fast_f32(&fft_instance, filtered_signal, output_fft, 0);
 
-    // Calcula magnitude da FFT (ignorando índice 0 e primeiros índices)
-    arm_cmplx_mag_f32(output_fft, magnitude_fft, FRAME_LEN / 2);
+    // Calcular magnitude da FFT e aplicar HPS diretamente no mesmo array
+    arm_cmplx_mag_f32(output_fft, filtered_signal, FRAME_LEN / 2);
+    apply_hps(filtered_signal, filtered_signal, FRAME_LEN / 2);
 
-    //Aplicar Harmonic Product Spectrum (HPS)
-    int hps_len = FRAME_LEN / 2;
-    float hps_result[hps_len];
-    apply_hps(magnitude_fft, hps_result, hps_len);
-
-    // Encontrar o pico máximo
+    // Encontrar pico máximo
     float max_value = 0.0f;
     int max_index = 0;
-    int start_index = 5;  // Ignorar os primeiros 5 índices
+    int start_index = 5;
 
-    for (int i = start_index; i < hps_len; i++) {
-        if (hps_result[i] > max_value) {
-            max_value = hps_result[i];
+    for (int i = start_index; i < FRAME_LEN / 2; i++) {
+        if (filtered_signal[i] > max_value) {
+            max_value = filtered_signal[i];
             max_index = i;
         }
     }
 
     // Ignorar picos pequenos
     if (max_value < 0.1f) {
-        max_index = 0;  // Frequência zero
+        max_index = 0;
     }
 
-    // Converter índice para frequência em Hz
+    // Converter índice para frequência
     float frequency = (float)max_index * SAMPLE_RATE / FRAME_LEN;
     int noteIndex = getClosestNoteIndex(frequency);
 
@@ -367,7 +340,6 @@ void process_fft(void) {
     /* snprintf(msg, sizeof(msg), "Index: %d, Freq: %.2f Hz, nota mais prox: %d \r\n", max_index, frequency, noteIndex); */
     /* usart_send_string(msg); */
 }
-
 void i2c_setup(void) {
     /* enable clock for GPIOB and I2C1 */
     rcc_periph_clock_enable(RCC_GPIOB);
@@ -458,9 +430,9 @@ int main(void) {
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
     arm_fir_init_f32(&fir_instance, NUM_TAPS, (float32_t *)fir_coeffs, fir_state, FRAME_LEN);
 
-
+    
     ssd1306_Init();
-    ssd1306_WriteString("Inicio", Font_11x18,White);
+    ssd1306_WriteString("...", Font_16x26,White);
     ssd1306_UpdateScreen();
     usart_send_string("inicio do codigo\r\n");
     char msg[50];
