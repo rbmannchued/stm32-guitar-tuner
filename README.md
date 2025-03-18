@@ -2,7 +2,7 @@
 
 libopencm3 and CMSIS DSP based guitar tuner.\
 resolution of 0.97hz and great efficiency using stm32f411.
-![Tuner Working Gif](/img/gifTunerCut.gif)
+![Tuner Working Gif](/img/gifTuneryCut.gif)
 
 # Usage
 After you clone the repo with submodules, \

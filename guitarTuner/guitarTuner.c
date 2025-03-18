@@ -1,4 +1,4 @@
-#include <libopencm3/stm32/rcc.h>
+y#include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/adc.h>
 #include <libopencm3/stm32/usart.h>
@@ -22,48 +22,25 @@
 #define SAMPLE_RATE 4000
 #define NUM_TAPS 64
 
-volatile uint32_t sample_count = 0;
-volatile uint32_t last_time = 0;
-volatile uint32_t ms_counter = 0;
+
+volatile uint16_t adc_buffer1[FRAME_LEN];
+volatile uint16_t adc_buffer2[FRAME_LEN];
+volatile uint16_t *current_buffer = adc_buffer1;
+volatile uint16_t *processing_buffer = adc_buffer2;
+
+volatile int buffer_index = 0;
+volatile int frame_ready = 0;
 
 static volatile float32_t filtered_signal[FRAME_LEN];
 static volatile float32_t input_signal[FRAME_LEN];
-static volatile uint16_t adc_buffer[FRAME_LEN];
-static volatile int buffer_index = 0;
-static volatile int frame_ready = 0;
+
+
 float magnitude_fft[FRAME_LEN / 2];
 float input_fft[FRAME_LEN * 2];  // Entrada complexa (real + imaginária)
 float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
 arm_fir_instance_f32 fir_instance;
 float32_t fir_state[FRAME_LEN + NUM_TAPS - 1];
-
-typedef struct {
-    uint16_t buffer[FRAME_LEN]; // Buffer para armazenar amostras
-    uint16_t head;  // Índice de escrita
-    uint16_t tail;  // Índice de leitura
-    uint16_t count; // Quantidade de elementos na fila
-} CircularBuffer;
-
-CircularBuffer adcBuffer = { .head = 0, .tail = 0, .count = 0 };
-
-void circularBuffer_Push(CircularBuffer *cb, uint16_t value) {
-    if (cb->count < FRAME_LEN) {  // Verifica se a fila não está cheia
-        cb->buffer[cb->head] = value;
-        cb->head = (cb->head + 1) % FRAME_LEN;
-        cb->count++;
-    }
-}
-
-uint16_t circularBuffer_Pop(CircularBuffer *cb) {
-    uint16_t value = 0;
-    if (cb->count > 0) { // Verifica se a fila não está vazia
-        value = cb->buffer[cb->tail];
-        cb->tail = (cb->tail + 1) % FRAME_LEN;
-        cb->count--;
-    }
-    return value;
-}
 
 const float32_t fir_coeffs[64] = {
     -0.00019963,
@@ -254,13 +231,20 @@ void displayResult(int noteDiff, double frequency, int noteIndex){
 void adc_isr(void) {
     if (adc_eoc(ADC1)) {
         uint16_t adc_value = adc_read_regular(ADC1); // Lê o valor do ADC
-        circularBuffer_Push(&adcBuffer, adc_value);  // Insere na fila circular
-    }
-    if (adcBuffer.count >= FRAME_LEN) {
-	for (int i = 0; i < FRAME_LEN; i++) {
-	    adc_buffer[i] = circularBuffer_Pop(&adcBuffer); // Coleta os dados da fila
-	}
-	frame_ready = 1; // Indica que os dados estão prontos para processamento
+
+        // Insere no buffer atual
+        current_buffer[buffer_index++] = adc_value;
+
+        // Se o buffer atual estiver cheio, alterna para o outro buffer
+        if (buffer_index >= FRAME_LEN) {
+            buffer_index = 0;
+            frame_ready = 1;
+
+            // Alterna os buffers
+            volatile uint16_t *temp = current_buffer;
+            current_buffer = processing_buffer;
+            processing_buffer = temp;
+        }
     }
 }
 
@@ -277,7 +261,7 @@ void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
         }
     }
 }
-void process_fft(void) {
+void process_fft(volatile uint16_t *buffer) {
     char msg[65];
     float mean = 0.0f;
 
@@ -287,13 +271,13 @@ void process_fft(void) {
 
     // Cálculo da média e normalização do sinal com janela Hanning
     for (int i = 0; i < FRAME_LEN; i++) {
-        mean += (float)adc_buffer[i] / 4096.0f;
+        mean += (float)buffer[i] / 4096.0f;
     }
     mean /= FRAME_LEN;
 
     for (int i = 0; i < FRAME_LEN; i++) {
         float window = 0.5f * (1 - cosf(2 * PI * i / (FRAME_LEN - 1)));  
-        input_signal[i] = (((float)adc_buffer[i] / 4096.0f) - mean) * window;  
+        input_signal[i] = (((float)buffer[i] / 4096.0f) - mean) * window;  
     }
 
     //aplica o filtro fir
@@ -440,7 +424,7 @@ int main(void) {
 
     while (1) {
         if (frame_ready) {
-            process_fft();
+            process_fft(processing_buffer);
             frame_ready = 0;
         }
         __asm__("wfi");
