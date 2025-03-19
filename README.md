@@ -4,14 +4,14 @@ libopencm3 and CMSIS DSP based guitar tuner, using STM32f411.
 ![Tuner Working Gif](/img/gifTunerCut.gif)
 
 # Usage
-After you clone the repo with submodules(and build libopencm3), Compile the code then flash the \
+After cloning the repo with submodules(and build libopencm3), Compile the code then flash the \
 binary to your ST-link:
 ```
 cd guitarTuner
 make
 make flashbin
 ```
-After that you will probably have to unplug and plug again your ST-link,and that is it now if your \
+After that you will probably have to unplug and plug again your ST-link,and that is it, now if your \
 connections are right you will see the nearest note, frequency detected and a bar that shows how \
 far you are from the note.
 
@@ -38,16 +38,16 @@ allowing the samples to be written and processed at same time, the sample rate a
 chosen taking into consideration Nyquist, sampling resolution and MCU limitations.
 ## Signal Processing
 The signal processing was done in 5 steps:\
-### 1.Windowing and Normalization:\
+1.Windowing and Normalization:\
    Signal is normalized to be in a range between 0 and 1 and then hanning windowing is applied to avoid \
    spectral leak.\
-### 2.FIR:\
+2.FIR:\
 	Pass band FIR filter is applied to get only frequencies between 60 and \
-### 3.FFT:\
+3.FFT:\
 	Fourier Fast Transform to transform the signal from the time domain to the frequency domain.\
-### 4.Magnitude:\
+4.Magnitude:\
 	from the FFT, the magnitude of the frequencies are calculated.\
-### 5.HPS:\
+5.HPS:\
 	Harmonic Product Spectrum is applied to get the only the right octave from the buffer.\
 The Difference between before and post filter and HPS can be seen below:\
 ![Signal Comparison](img/ResultHPS-FilterE.png)
