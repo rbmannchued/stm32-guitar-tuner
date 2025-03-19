@@ -1,7 +1,6 @@
 # STM32 Electric Guitar Tuner
 
-libopencm3 and CMSIS DSP based guitar tuner.\
-using STM32f411.
+libopencm3 and CMSIS DSP based guitar tuner, using STM32f411.
 ![Tuner Working Gif](/img/gifTunerCut.gif)
 
 # Usage
