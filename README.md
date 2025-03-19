@@ -33,21 +33,21 @@ Using lm358 opamp is a good idea, you can follow the diagram:
 ![Opamp wiring diagram](/img/opAmpDiagram.png)
 
 ## Samples Storage
-When the adc conversion is made, it generates an interrupt that stores the sample in a ring  buffer \
+When the adc conversion is done, it generates an interrupt that stores the sample in a ring  buffer \
 allowing the samples to be written and processed at same time, the sample rate and frame lenght were \
 chosen taking into consideration Nyquist, sampling resolution and MCU limitations.
 ## Signal Processing
-The signal processing was made in 5 steps:\
-1.Windowing and Normalization:\
+The signal processing was done in 5 steps:\
+### 1.Windowing and Normalization:\
    Signal is normalized to be in a range between 0 and 1 and then hanning windowing is applied to avoid \
    spectral leak.\
-2.FIR:\
+### 2.FIR:\
 	Pass band FIR filter is applied to get only frequencies between 60 and \
-3.FFT:\
+### 3.FFT:\
 	Fourier Fast Transform to transform the signal from the time domain to the frequency domain.\
-4.Magnitude:\
+### 4.Magnitude:\
 	from the FFT, the magnitude of the frequencies are calculated.\
-5.HPS:\
+### 5.HPS:\
 	Harmonic Product Spectrum is applied to get the only the right octave from the buffer.\
 The Difference between before and post filter and HPS can be seen below:\
 ![Signal Comparison](img/ResultHPS-FilterE.png)
