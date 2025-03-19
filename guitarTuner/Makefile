@@ -18,11 +18,10 @@ libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_f32.c 			\
 libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_init_f32.c
 
 
-# TODO - you will need to edit these two lines!
+
 DEVICE=stm32f411ce
 OOCD_FILE = board/stm32f4discovery.cfg
 
-# You shouldn't have to edit anything below here.
 INCLUDES += $(patsubst %,-I%, . $(SHARED_DIR))
 INCLUDES += -I libs/cmsis_dsp/Include/
 INCLUDES += -I libs/cmsis_dsp/Include/dsp/
