@@ -1,38 +1,41 @@
+
 PROJECT = main
 BUILD_DIR = bin
 
-CFILES = guitarTuner.c							\
-libs/ssd1306_libopencm3/ssd1306.c					\
-libs/ssd1306_libopencm3/ssd1306_fonts.c					\
-libs/cmsis_dsp/Source/TransformFunctions/arm_rfft_fast_f32.c		\
-libs/cmsis_dsp/Source/ComplexMathFunctions/arm_cmplx_mag_f32.c		\
-libs/cmsis_dsp/Source/StatisticsFunctions/arm_max_f32.c			\
-libs/cmsis_dsp/Source/CommonTables/arm_common_tables.c			\
-libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_init_f32.c		\
-libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_f32.c			\
-libs/cmsis_dsp/Source/CommonTables/arm_const_structs.c			\
-libs/cmsis_dsp/Source/TransformFunctions/arm_bitreversal2.c		\
-libs/cmsis_dsp/Source/TransformFunctions/arm_cfft_radix8_f32.c 		\
-libs/cmsis_dsp/Source/TransformFunctions/arm_rfft_fast_init_f32.c 	\
-libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_f32.c 			\
-libs/cmsis_dsp/Source/FilteringFunctions/arm_fir_init_f32.c
+OPENCM3_DIR = ../libopencm3
+DEVICE = stm32f411ce
 
+CFILES = guitarTuner.c \
+         libs/ssd1306_libopencm3/ssd1306.c \
+         libs/ssd1306_libopencm3/ssd1306_fonts.c
 
+CMSISDSP_LIB = libs/cmsis_dsp/Source/build/libCMSISDSP.a
 
-DEVICE=stm32f411ce
-OOCD_FILE = board/stm32f4discovery.cfg
+# Compila CMSIS-DSP antes do projeto
+$(PROJECT).elf: $(CMSISDSP_LIB)
 
-INCLUDES += $(patsubst %,-I%, . $(SHARED_DIR))
-INCLUDES += -I libs/cmsis_dsp/Include/
-INCLUDES += -I libs/cmsis_dsp/Include/dsp/
-INCLUDES += -I libs/cmsis_dsp/Core/Include/
-INCLUDES += -I libs/ssd1306_libopencm3/
-OPENCM3_DIR=../libopencm3
+$(CMSISDSP_LIB):
+	$(MAKE) -C libs/cmsis_dsp/Source
+
+INCLUDES += -Ilibs/cmsis_dsp/Include
+INCLUDES += -Ilibs/cmsis_dsp/Include/dsp
+INCLUDES += -Ilibs/cmsis_dsp/Core/Include
+INCLUDES += -Ilibs/ssd1306_libopencm3
+INCLUDES += -I.
+
+LDLIBS += $(CMSISDSP_LIB)
 
 include $(OPENCM3_DIR)/mk/genlink-config.mk
 include ../rules.mk
 include $(OPENCM3_DIR)/mk/genlink-rules.mk
 
-flashbin:
-	st-flash write main.bin 0x8000000
+# Regra para gerar .bin a partir do .elf
+$(PROJECT).bin: $(PROJECT).elf
+	arm-none-eabi-objcopy -Obinary $< $@
 
+
+bin: $(PROJECT).bin
+
+#Flash
+flashbin:
+	st-flash write $(PROJECT).bin 0x8000000

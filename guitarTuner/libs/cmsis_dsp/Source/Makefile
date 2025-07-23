@@ -1,77 +1,50 @@
-# This is an example Makefile to show how to build the library
+CMSIS_ROOT = ..
 
-COMPILER_ROOT = 
-CMSIS_ROOT = 
+CC := arm-none-eabi-gcc
+AR := arm-none-eabi-ar
 
-# Compilation tools
-CC := $(COMPILER_ROOT)/ARMCompiler6.18/bin/armclang
-ARMAR :=  $(COMPILER_ROOT)/ARMCompiler6.18/bin/armar
-
-# Compilation flags (here for Cortex-M55)
-CFLAGS := -mcpu=cortex-m55 --target=arm-arm-none-eabi \
- -Wsign-compare \
- -Wdouble-promotion \
- -Ofast -ffast-math \
- -DNDEBUG \
- -Wall -Wextra  -Werror \
- -fshort-enums -fshort-wchar \
- -mfloat-abi=hard
-
-
-# Path to CMSIS_5
-CMSIS_5 := $(CMSIS_ROOT)/CMSIS_5
-
-# Path to CMSIS_DSP
-CMSIS_DSP := $(CMSIS_ROOT)/CMSIS-DSP
-
-# Path to CMSIS Core includes for Cortex-M
-# For low end Cortex-A, use Core_A
-# For high end Cortex-A (aarch64), don't use CMSIS 
-# Core Includes (Refer to the CMSIS-DSP README to 
-# know how to build in that case)
-CMSIS_CORE_INCLUDES := $(CMSIS_5)/CMSIS/Core/Include 
-
-# Sources
-SRCS := $(CMSIS_DSP)/Source/BasicMathFunctions/BasicMathFunctions.c \
- $(CMSIS_DSP)/Source/CommonTables/CommonTables.c \
- $(CMSIS_DSP)/Source/InterpolationFunctions/InterpolationFunctions.c \
- $(CMSIS_DSP)/Source/BayesFunctions/BayesFunctions.c \
- $(CMSIS_DSP)/Source/MatrixFunctions/MatrixFunctions.c \
- $(CMSIS_DSP)/Source/ComplexMathFunctions/ComplexMathFunctions.c \
- $(CMSIS_DSP)/Source/QuaternionMathFunctions/QuaternionMathFunctions.c \
- $(CMSIS_DSP)/Source/ControllerFunctions/ControllerFunctions.c \
- $(CMSIS_DSP)/Source/SVMFunctions/SVMFunctions.c \
- $(CMSIS_DSP)/Source/DistanceFunctions/DistanceFunctions.c \
- $(CMSIS_DSP)/Source/StatisticsFunctions/StatisticsFunctions.c \
- $(CMSIS_DSP)/Source/FastMathFunctions/FastMathFunctions.c \
- $(CMSIS_DSP)/Source/SupportFunctions/SupportFunctions.c \
- $(CMSIS_DSP)/Source/FilteringFunctions/FilteringFunctions.c \
- $(CMSIS_DSP)/Source/TransformFunctions/TransformFunctions.c \
- $(CMSIS_DSP)/Source/WindowFunctions/WindowFunctions.c
+CFLAGS := -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard \
+ -Os -ffunction-sections -fdata-sections -DNDEBUG -Wall -Wextra -Werror \
+ -fshort-enums -Wno-unused-parameter
 
 # Includes
-DSP_INCLUDES := $(CMSIS_DSP)/Include \
-  $(CMSIS_DSP)/PrivateInclude 
+CMSIS_CORE := $(CMSIS_ROOT)/CMSIS_5/CMSIS/Core/Include
+DSP_INCLUDES := \
+  $(CMSIS_ROOT)/Include \
+  $(CMSIS_ROOT)/PrivateInclude \
+  $(CMSIS_ROOT)/Core/Include/
 
-# If Neon and Cortex-A
-#DSP_INCLUDES += $(CMSIS_DSP)/ComputeLibrary/Include 
-#SRCS += $(CMSIS_DSP)/ComputeLibrary/Source/arm_cl_tables.c 
-
-# Compilation flags for include folders
-INC_FLAGS := $(addprefix -I,$(DSP_INCLUDES))
-INC_FLAGS += $(addprefix -I,$(CMSIS_CORE_INCLUDES))
+INC_FLAGS := $(addprefix -I, $(DSP_INCLUDES) $(CMSIS_CORE))
 CFLAGS += $(INC_FLAGS)
 
-# Output folder for build products
-BUILDDIR := ./builddir
+BUILDDIR := build
 
-OBJECTS := $(SRCS:%=$(BUILDDIR)/%.o)
+SRCS := \
+  TransformFunctions/arm_rfft_fast_f32.c \
+  ComplexMathFunctions/arm_cmplx_mag_f32.c \
+  StatisticsFunctions/arm_max_f32.c \
+  CommonTables/arm_common_tables.c \
+  TransformFunctions/arm_cfft_init_f32.c \
+  TransformFunctions/arm_cfft_f32.c \
+  CommonTables/arm_const_structs.c \
+  TransformFunctions/arm_bitreversal2.c \
+  TransformFunctions/arm_cfft_radix8_f32.c \
+  TransformFunctions/arm_rfft_fast_init_f32.c \
+  FilteringFunctions/arm_fir_f32.c \
+  FilteringFunctions/arm_fir_init_f32.c
 
-# Build rules
-$(BUILDDIR)/libCMSISDSP.a: $(OBJECTS)
-	$(ARMAR) -rc $@ $(OBJECTS)
-	
+OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 
-$(BUILDDIR)/%.c.o: %.c
-	mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+all: $(BUILDDIR)/libCMSISDSP.a
+
+$(BUILDDIR)/libCMSISDSP.a: $(OBJS)
+	$(AR) rcs $@ $^
+
+$(BUILDDIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(BUILDDIR)
+
+.PHONY: all clean
