@@ -18,7 +18,7 @@
 
 
 // resolution of 0.97hz
-#define FRAME_LEN 4096
+#define FRAME_LEN 2048
 #define SAMPLE_RATE 4000
 #define NUM_TAPS 64
 
@@ -41,7 +41,17 @@ float output_fft[FRAME_LEN];      // Magnitude da FFT
 arm_rfft_fast_instance_f32 fft_instance;
 arm_fir_instance_f32 fir_instance;
 float32_t fir_state[FRAME_LEN + NUM_TAPS - 1];
+// Instância do filtro biquad
+/* #define NUM_STAGES 1 */
+/* arm_biquad_casd_df1_inst_f32 biquad_instance; */
 
+/* // Estado do filtro (4 valores por estágio) */
+/* float32_t biquad_state[4 * NUM_STAGES]; */
+
+
+/* float32_t biquad_coeffs[5 * NUM_STAGES] = { */
+/*     0.2066f, 0.0f, -0.2066f, 0.0f, 0.5868f  // b0, b1, b2, a1, a2 */
+/*};*/
 const float32_t fir_coeffs[64] = {
     -0.00019963,
     0.00046691,
@@ -247,20 +257,45 @@ void adc_isr(void) {
         }
     }
 }
+// Função HPS adaptativa para guitarra
+// magnitude_fft  -> espectro de magnitude (entrada)
+// hps_result     -> saída do HPS (ou cópia da magnitude para agudos)
+// hps_len        -> tamanho do espectro (FRAME_LEN/2)
+// sample_rate    -> taxa de amostragem (ex: 4000 Hz)
+// frame_len      -> tamanho do frame (ex: 2048)
 
-void apply_hps(float *magnitude_fft, float *hps_result, int hps_len) {
-    // Inicializa o resultado do HPS com a magnitude da FFT
+void apply_hps_adaptive(float *magnitude_fft, float *hps_result, int hps_len,
+                        float sample_rate, int frame_len) {
+    // Copia espectro base
     for (int i = 0; i < hps_len; i++) {
         hps_result[i] = magnitude_fft[i];
     }
 
-    // Decimar e multiplicar
-    for (int decimation = 2; decimation <= 2; decimation++) { 
-        for (int i = 0; i < hps_len / decimation; i++) {
-            hps_result[i] *= magnitude_fft[i * decimation];
+    // Frequência de resolução (Hz por bin)
+    float bin_hz = sample_rate / (float)frame_len;
+
+    // Ajusta profundidade do HPS conforme a frequência (bin)
+    for (int i = 0; i < hps_len; i++) {
+        float freq = i * bin_hz;
+        int max_harm = 1; // padrão = só magnitude (agudos)
+
+        if (freq < 200.0f) {
+            max_harm = 3;   // graves
+        } else if (freq < 600.0f) {
+            max_harm = 2;   // médios
+        }
+
+        // Aplica produto harmônico
+        for (int decimation = 2; decimation <= max_harm; decimation++) {
+            int idx = i * decimation;
+            if (idx < hps_len) {
+                hps_result[i] *= magnitude_fft[idx];
+            }
         }
     }
 }
+
+ 
 void process_fft(volatile uint16_t *buffer) {
     char msg[65];
     float mean = 0.0f;
@@ -271,13 +306,13 @@ void process_fft(volatile uint16_t *buffer) {
 
     // Cálculo da média e normalização do sinal com janela Hanning
     for (int i = 0; i < FRAME_LEN; i++) {
-        mean += (float)buffer[i] / 4096.0f;
+        mean += (float)buffer[i] / FRAME_LEN;
     }
     mean /= FRAME_LEN;
 
     for (int i = 0; i < FRAME_LEN; i++) {
         float window = 0.5f * (1 - cosf(2 * PI * i / (FRAME_LEN - 1)));  
-        input_signal[i] = (((float)buffer[i] / 4096.0f) - mean) * window;  
+        input_signal[i] = (((float)buffer[i] / FRAME_LEN) - mean) * window;  
     }
 
     //aplica o filtro fir
@@ -287,7 +322,16 @@ void process_fft(volatile uint16_t *buffer) {
 
     // Calcular magnitude da FFT e aplicar HPS diretamente no mesmo array
     arm_cmplx_mag_f32(output_fft, filtered_signal, FRAME_LEN / 2);
-    apply_hps(filtered_signal, filtered_signal, FRAME_LEN / 2);
+//    apply_hps(filtered_signal, filtered_signal, FRAME_LEN / 2);
+    apply_hps_adaptive(filtered_signal, filtered_signal, FRAME_LEN / 2, SAMPLE_RATE, FRAME_LEN);
+
+
+    /* arm_biquad_cascade_df1_f32(&biquad_instance, input_signal, filtered_signal, FRAME_LEN); */
+    /* arm_rfft_fast_f32(&fft_instance, filtered_signal, output_fft, 0); */
+
+    /* // Calcular magnitude da FFT e aplicar HPS diretamente no mesmo array */
+    /* arm_cmplx_mag_f32(output_fft, filtered_signal, FRAME_LEN / 2); */
+    /* apply_hps(filtered_signal, filtered_signal, FRAME_LEN / 2); */
 
     // Encontrar pico máximo
     float max_value = 0.0f;
@@ -410,9 +454,23 @@ int main(void) {
     usart_init();
     timer_init();
     i2c_setup();
+    rcc_periph_clock_enable(GPIOA);
+    rcc_periph_clock_enable(GPIOC);
+
+    gpio_mode_setup(GPIOA, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO6);
+    gpio_mode_setup(GPIOC, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO13);
+    gpio_set(GPIOA, GPIO6);
+    gpio_set(GPIOC, GPIO13);
     
     arm_rfft_fast_init_f32(&fft_instance, FRAME_LEN);
     arm_fir_init_f32(&fir_instance, NUM_TAPS, (float32_t *)fir_coeffs, fir_state, FRAME_LEN);
+    /* arm_biquad_cascade_df1_init_f32( */
+    /* 	&biquad_instance, */
+    /* 	NUM_STAGES, */
+    /* 	biquad_coeffs, */
+    /* 	biquad_state */
+    /* 	); */
+    
 
     
     ssd1306_Init();
@@ -430,4 +488,3 @@ int main(void) {
         __asm__("wfi");
     }
 }
- 
